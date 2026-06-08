@@ -1,13 +1,46 @@
-return (
+'use client';
+import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzhsaqjxxiklu.supabase.co';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const SESSIONS = [
+  { id: 'mon', label: '週一場' },
+  { id: 'fri', label: '週五場' },
+  { id: 'sat', label: '週六場' }
+];
+
+export default function Home() {
+  const [day, setDay] = useState('mon');
+  const [list, setList] = useState([]);
+  const [form, setForm] = useState({ name: '', count: '1', password: '' });
+
+  const load = async () => {
+    const { data } = await supabase.from('pickleball_registrations').select('*').order('created_at', { ascending: true });
+    if (data) setList(data.filter(item => item.session_id === day));
+  };
+
+  useEffect(() => { load(); }, [day]);
+
+  const submit = async () => {
+    if (!form.name || form.password.length !== 4) { alert('請輸入暱稱與4位密碼'); return; }
+    const { error } = await supabase.from('pickleball_registrations').insert([{
+      name: form.name, count: parseInt(form.count), password: form.password, session_id: day, created_at: new Date().toISOString()
+    }]);
+    if (error) alert('報名失敗：' + error.message);
+    else { alert('報名成功！'); setForm({ name: '', count: '1', password: '' }); load(); }
+  };
+
+  return (
     <main className="min-h-screen bg-[#090d16] text-white p-8">
       <div className="max-w-md mx-auto space-y-12">
-        {/* 標題區域：調整字體大小與層級 */}
         <div className="text-center bg-slate-900 p-8 rounded-3xl border border-emerald-500/30">
           <h1 className="text-5xl font-black mb-2">七賢國小匹克球</h1>
           <p className="text-2xl text-emerald-400 font-bold">新手免費體驗報名</p>
         </div>
 
-        {/* 日期選擇：下方加上時間標記 */}
         <div className="grid grid-cols-3 gap-4">
           {SESSIONS.map(s => (
             <button key={s.id} onClick={() => setDay(s.id)} className={`py-4 rounded-xl font-bold flex flex-col items-center ${day === s.id ? 'bg-emerald-500 text-black' : 'bg-slate-800'}`}>
@@ -17,7 +50,6 @@ return (
           ))}
         </div>
 
-        {/* 報名表單 */}
         <div className="bg-slate-900 p-8 rounded-3xl space-y-6">
           <input className="w-full p-6 bg-black rounded-2xl text-2xl" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
           <select className="w-full p-6 bg-black rounded-2xl text-2xl" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
@@ -27,7 +59,6 @@ return (
           <button className="w-full bg-emerald-500 p-6 rounded-2xl font-black text-black text-3xl" onClick={submit}>確認報名</button>
         </div>
 
-        {/* 報名清單 */}
         <div className="space-y-4">
           <h2 className="text-2xl font-bold">目前人數：{list.length} / 9</h2>
           {list.map((item, i) => (
@@ -43,4 +74,4 @@ return (
       </div>
     </main>
   );
-  
+}
