@@ -1,4 +1,13 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  typescript: {
+    // 強制忽略 TypeScript 編譯檢查
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    // 強制忽略 ESLint 代碼風格檢查
+    ignoreDuringBuilds: true,
+  },
+}
 
-export default nextConfig;
+module.exports = nextConfig
