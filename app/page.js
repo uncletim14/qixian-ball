@@ -18,7 +18,7 @@ export default function Home() {
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  // 載入資料（安全版：不選取 password 欄位）
+  // 載入資料
   const load = async () => {
     const { data, error } = await supabase
       .from('pickleball_registrations')
@@ -32,20 +32,31 @@ export default function Home() {
 
   useEffect(() => { load(); }, [day]);
 
-  // 計算總人數（加總每個人的 count）
-  const totalCount = list.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+  // ─── 核心備取邏輯計算 ───
+  let currentTotal = 0;
+  const mainList = [];  // 正取名單
+  const waitList = [];  // 備取名單
 
-  // 送出報名
+  list.forEach(item => {
+    const seats = Number(item.count) || 0;
+    // 如果目前人數 + 這組人數 小於等於 8，就是正取
+    if (currentTotal + seats <= 8) {
+      mainList.push(item);
+      currentTotal += seats;
+    } else {
+      // 只要有一點點爆掉（例如 7 + 2 = 9），整組直接丟進備取
+      waitList.push(item);
+    }
+  });
+
+  // 備取總人數計算
+  const totalWaitCount = waitList.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+
+  // 送出報名（移除人數上限限制，改為無限開放登記）
   const submit = async () => {
     if (!form.name.trim() || form.password.length !== 4) { 
       alert('請輸入暱稱與 4 位密碼'); 
       return; 
-    }
-    
-    // 名額上限改為 8 位防呆
-    if (totalCount + parseInt(form.count) > 8) {
-      alert('報名人數已超過 8 位上限！');
-      return;
     }
 
     const { error } = await supabase.from('pickleball_registrations').insert([{
@@ -59,7 +70,7 @@ export default function Home() {
     if (error) {
       alert('報名失敗：' + error.message);
     } else { 
-      alert('報名成功！'); 
+      alert('登記成功！'); 
       setForm({ name: '', count: '1', password: '' }); 
       load(); 
     }
@@ -86,16 +97,19 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#090d16] text-white p-8">
-      {/* 最大寬度調寬（max-w-2xl），更適合兩倍大的字體呈現 */}
       <div className="max-w-2xl mx-auto space-y-12 py-10">
         
-        {/* 標題與註記更新（字體放大 2 倍） */}
+        {/* 標題與註記 */}
         <div className="text-center bg-slate-900 p-12 rounded-3xl border border-emerald-500/30 shadow-2xl">
-          <h1 className="text-7xl font-black mb-6 text-emerald-400 tracking-wider">七賢國小交流團</h1>
-          <p className="text-3xl text-slate-400 font-bold">新手體驗與新手區報名</p>
+          <h1 className="text-7xl font-black mb-6 text-emerald-400 tracking-wider">
+            七賢國小匹克球交流團
+          </h1>
+          <p className="text-3xl text-slate-400 font-bold">
+            新手免費體驗與新手區報名
+          </p>
         </div>
 
-        {/* 場次選擇按鈕（加上 19:00-21:20 註記，字體放大） */}
+        {/* 場次選擇 */}
         <div className="grid grid-cols-3 gap-6">
           {SESSIONS.map(s => (
             <button 
@@ -115,7 +129,7 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 填寫表單（輸入框、下拉選單、按鈕高度與字體全面放大） */}
+        {/* 填寫表單 */}
         <div className="bg-slate-900 p-8 rounded-3xl space-y-6 border border-slate-800 shadow-xl">
           <input 
             className="w-full p-6 bg-black rounded-2xl border-2 border-slate-800 focus:border-emerald-500 focus:outline-none text-3xl" 
@@ -146,30 +160,30 @@ export default function Home() {
             className="w-full bg-emerald-500 p-6 rounded-2xl text-3xl font-black text-black hover:bg-emerald-400 active:scale-[0.99] transition-all mt-4" 
             onClick={submit}
           >
-            確認報名
+            確認報名 (滿額自動改備取)
           </button>
         </div>
 
-        {/* 報名名單列表（名額上限改為 8 位，字體放大） */}
+        {/* ─── 區塊一：正取名單 ─── */}
         <div className="space-y-6">
           <div className="flex justify-between items-center px-2">
             <h2 className="text-3xl font-black tracking-wide">
-              目前人數：<span className="text-emerald-400">{totalCount}</span> / 8
+              正取人數：<span className="text-emerald-400">{currentTotal}</span> / 8
             </h2>
-            {totalCount >= 8 && (
-              <span className="text-xl bg-rose-500/20 text-rose-400 font-black px-4 py-2 rounded-xl animate-pulse">
-                已額滿
+            {currentTotal >= 8 && (
+              <span className="text-xl bg-amber-500/20 text-amber-400 font-black px-4 py-2 rounded-xl">
+                正取已滿
               </span>
             )}
           </div>
           
-          {list.length === 0 ? (
+          {mainList.length === 0 ? (
             <div className="text-center py-12 text-2xl text-slate-500 border-2 border-dashed border-slate-800 rounded-2xl">
-              目前暫無人報名，快來搶頭香！
+              目前暫無正取球友，快來搶位！
             </div>
           ) : (
             <div className="space-y-4">
-              {list.map((item) => (
+              {mainList.map((item) => (
                 <div key={item.id} className="bg-slate-900 p-6 rounded-2xl flex justify-between items-center border border-slate-800 shadow-md">
                   <span className="text-2xl font-bold tracking-wide">
                     {item.name} <span className="text-emerald-400 text-xl ml-3">({item.count}位)</span>
@@ -185,6 +199,34 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {/* ─── 區塊二：備取名單（有資料才會顯示） ─── */}
+        {waitList.length > 0 && (
+          <div className="space-y-6 pt-6 border-t-2 border-dashed border-slate-800">
+            <div className="flex justify-between items-center px-2">
+              <h2 className="text-3xl font-black tracking-wide text-amber-400">
+                遞補備取：<span>{totalWaitCount}</span> 位
+              </h2>
+            </div>
+            
+            <div className="space-y-4">
+              {waitList.map((item, index) => (
+                <div key={item.id} className="bg-slate-950 p-6 rounded-2xl flex justify-between items-center border border-amber-500/20 shadow-md opacity-80">
+                  <span className="text-2xl font-bold tracking-wide text-slate-300">
+                    <span className="text-amber-400 mr-2">[備取 {index + 1}]</span>
+                    {item.name} <span className="text-amber-500/80 text-xl ml-3">({item.count}位)</span>
+                  </span>
+                  <button 
+                    className="text-rose-400 hover:text-rose-300 text-xl font-black transition-colors bg-rose-500/10 hover:bg-rose-500/20 px-4 py-2 rounded-xl" 
+                    onClick={() => handleDelete(item)}
+                  >
+                    取消
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
     </main>
