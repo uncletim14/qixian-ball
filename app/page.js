@@ -14,8 +14,8 @@ const DAYS = [
 ];
 
 const TYPES = [
-  { id: 'experience', label: '新手體驗' },
-  { id: 'normal', label: '新手區' }
+  { id: 'experience', label: '新手體驗', note: '免費' },
+  { id: 'normal', label: '新手區', note: '100元/人' }
 ];
 
 export default function Home() {
@@ -24,7 +24,7 @@ export default function Home() {
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  // 組合出唯一的資料庫查詢識別碼，例如: "mon_experience" 或 "fri_normal"
+  // 組合出唯一的資料庫查詢識別碼
   const currentSessionId = `${selectedDay}_${selectedType}`;
 
   // 載入資料
@@ -80,7 +80,7 @@ export default function Home() {
       name: trimmedName, 
       count: parseInt(form.count), 
       password: form.password, 
-      session_id: currentSessionId, // 儲存組合後的識別碼
+      session_id: currentSessionId, 
       created_at: new Date().toISOString()
     }]);
 
@@ -143,19 +143,22 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 3. 第二層：組別類型選擇 */}
+        {/* 3. 第二層：組別類型選擇 (加入免費與100元註記) */}
         <div className="grid grid-cols-2 gap-6">
           {TYPES.map(t => (
             <button 
               key={t.id} 
               onClick={() => setSelectedType(t.id)} 
-              className={`p-5 rounded-2xl text-3xl font-black transition-all duration-200 border-2 ${
+              className={`p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 ${
                 selectedType === t.id 
                   ? 'bg-transparent text-emerald-400 border-emerald-500 shadow-lg shadow-emerald-500/10 scale-102' 
                   : 'bg-slate-900/50 text-slate-400 border-slate-800 hover:text-slate-300'
               }`}
             >
-              {t.label}
+              <span className="text-3xl">{t.label}</span>
+              <span className={`text-lg ${selectedType === t.id ? 'text-emerald-500 font-bold' : 'text-slate-500'}`}>
+                ({t.note})
+              </span>
             </button>
           ))}
         </div>
@@ -175,7 +178,8 @@ export default function Home() {
           <div className="text-2xl font-bold text-slate-400 mb-2 text-center">
             您正在報名：
             <span className="text-emerald-400 font-black">
-              {DAYS.find(d => d.id === selectedDay)?.label} - {TYPES.find(t => t.id === selectedType)?.label}
+              {DAYS.find(d => d.id === selectedDay)?.label} - {TYPES.find(t => t.id === selectedType)?.label} 
+              （{TYPES.find(t => t.id === selectedType)?.note}）
             </span>
           </div>
 
