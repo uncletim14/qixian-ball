@@ -188,4 +188,86 @@ export default function Home() {
           <div className="text-3xl font-black text-[#1e291b] tracking-wide">
             ⏰ 活動時間：19:00 - 21:20
           </div>
-          <div className="text-lg text-
+          <div className="text-lg text-[#6e8550] font-bold">
+            🔄 每星期六晚上 18:00 準時更新開放下週報名
+          </div>
+        </div>
+
+        {/* 5. 報名表單 */}
+        <div className="bg-white p-8 rounded-3xl space-y-6 shadow-xl shadow-[#cbd7be]/40">
+          <div className="text-xl font-bold text-[#5b6a57] mb-2 text-center">
+            您正在報名：
+            <span className="text-[#1e291b] font-black">
+              {DAYS.find(d => d.id === selectedDay)?.label} ({activeDate}) - {TYPES.find(t => t.id === selectedType)?.label} 
+            </span>
+          </div>
+
+          <input 
+            className="w-full p-6 bg-slate-50 rounded-2xl border border-slate-200 focus:border-[#1e291b] focus:outline-none text-2xl text-[#1e291b]" 
+            placeholder="輸入暱稱" 
+            value={form.name} 
+            onChange={e => setForm({...form, name: e.target.value})} 
+          />
+          <select 
+            className="w-full p-6 bg-slate-50 rounded-2xl border border-slate-200 focus:border-[#1e291b] focus:outline-none text-2xl text-[#1e291b]" 
+            value={form.count} 
+            onChange={e => setForm({...form, count: e.target.value})}
+          >
+            <option value="1">1 位</option>
+            <option value="2">2 位</option>
+          </select>
+          <input 
+            className="w-full p-6 bg-slate-50 rounded-2xl border border-slate-200 focus:border-[#1e291b] focus:outline-none text-2xl text-[#1e291b]" 
+            type="password" 
+            placeholder="取消密碼 (4位數字)" 
+            maxLength={4} 
+            value={form.password} 
+            onChange={e => setForm({...form, password: e.target.value})} 
+          />
+          <button className="w-full bg-[#1e291b] text-white p-6 rounded-2xl text-2xl font-black hover:bg-[#2d3d29] transition-all mt-4 shadow-lg" onClick={submit}>
+            確認報名 (滿額自動改備取)
+          </button>
+        </div>
+
+        {/* 6. 名單顯示 */}
+        <div className="space-y-6">
+          <div className="flex justify-between items-center px-2">
+            <h2 className="text-3xl font-black tracking-wide text-[#1e291b]">
+              正取人數：<span className="text-[#6e8550]">{currentTotal}</span> / 8
+            </h2>
+            {currentTotal >= 8 && <span className="text-lg bg-red-100 text-red-600 font-black px-4 py-2 rounded-xl">正取已滿</span>}
+          </div>
+          
+          {mainList.length === 0 ? (
+            <div className="text-center py-12 text-xl text-[#75846f] border-2 border-dashed border-white rounded-2xl bg-white/40">目前暫無報名球友</div>
+          ) : (
+            <div className="space-y-4">
+              {mainList.map((item) => (
+                <div key={item.id} className="bg-white p-6 rounded-2xl flex justify-between items-center shadow-sm">
+                  <span className="text-2xl font-bold tracking-wide text-[#1e291b]">{item.name} <span className="text-[#6e8550] text-xl ml-3">({item.count}位)</span></span>
+                  <button className="text-red-500 hover:text-red-700 text-lg font-black bg-red-50 px-4 py-2 rounded-xl transition-colors" onClick={() => handleDelete(item)}>取消</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 7. 備取名單 */}
+        {waitList.length > 0 && (
+          <div className="space-y-6 pt-6 border-t border-[#c6d2b5]">
+            <h2 className="text-3xl font-black text-[#966b1d] px-2">遞補備取：{totalWaitCount} 位</h2>
+            <div className="space-y-4">
+              {waitList.map((item, index) => (
+                <div key={item.id} className="bg-white/80 p-6 rounded-2xl flex justify-between items-center shadow-sm border border-[#d6e0c7]">
+                  <span className="text-2xl font-bold text-[#475443]"><span className="text-[#a87922] mr-2">[備取 {index + 1}]</span>{item.name} <span className="text-[#a87922]/80 text-xl ml-3">({item.count}位)</span></span>
+                  <button className="text-red-500 hover:text-red-700 text-lg font-black px-4 py-2" onClick={() => handleDelete(item)}>取消</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </main>
+  );
+}
