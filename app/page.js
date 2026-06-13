@@ -7,7 +7,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzh
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── 輔助函式：自動推算日期 ───
+// ─── 輔助函式：根據每週六 18:00 自動推算日期 ───
 function getTargetDateStr(targetDayOfWeek) {
   const now = new Date();
   const thisSaturday = new Date(now);
@@ -123,27 +123,24 @@ export default function Home() {
   };
 
   return (
-    /* 主背景維持高質感淺綠色 (#e2ebd5) */
-    <main className="min-h-screen bg-[#e2ebd5] text-[#232b21] p-8">
+    /* ✨ 最終背景設定：淺藍灰色底色 (#f0f4f8) */
+    <main className="min-h-screen bg-[#f0f4f8] text-[#2d3748] p-8">
       <div className="max-w-2xl mx-auto space-y-10 py-6">
         
-        {/* 1. 頂部大標題區塊（白底圓角，更新為三行文字排列） */}
-        <div className="text-center bg-white p-12 rounded-3xl shadow-md border border-[#c9d4b8]">
-          {/* 第一行：七賢國小匹克球 */}
-          <h1 className="text-6xl font-black text-[#1e291b] tracking-wider">
+        {/* 1. 頂部大標題區塊（卡片背景換成淺綠色，文字換成藍色） */}
+        <div className="text-center bg-[#D9EAD3] p-12 rounded-3xl shadow-md border border-[#b6d7a8]">
+          <h1 className="text-6xl font-black text-[#0070C0] tracking-wider leading-tight">
             七賢國小匹克球
           </h1>
-          {/* 第二行：交流團 */}
-          <h1 className="text-6xl font-black mt-3 text-[#1e291b] tracking-wider">
+          <h1 className="text-6xl font-black text-[#0070C0] tracking-wider mt-2">
             交流團
           </h1>
-          {/* ✨ 第三行：新手免費體驗與新手區報名 */}
-          <p className="text-2xl text-[#5b6a57] font-bold tracking-widest border-t border-slate-100 pt-4 mt-6">
+          <p className="text-2xl text-[#0070C0] font-black tracking-widest border-t border-[#b6d7a8] pt-4 mt-6">
             新手免費體驗與新手區報名
           </p>
         </div>
 
-        {/* 2. 第一層：日期按鈕 */}
+        {/* 2. 第一層：日期按鈕 (選中時藍色背景，未選中時白色背景) */}
         <div className="grid grid-cols-3 gap-6">
           {DAYS.map(d => (
             <button 
@@ -151,19 +148,19 @@ export default function Home() {
               onClick={() => setSelectedDay(d.id)} 
               className={`p-5 rounded-2xl font-black transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm ${
                 selectedDay === d.id 
-                  ? 'bg-[#1e291b] text-white shadow-xl scale-105' 
-                  : 'bg-white text-[#475443] hover:bg-slate-50'
-              }`}
+                  ? 'bg-[#0070C0] text-white shadow-xl scale-105 border-[#0070C0]' 
+                  : 'bg-white text-[#4a5568] hover:bg-slate-50 border-white'
+              } border-2`}
             >
               <span className="text-2xl">{d.label}</span>
-              <span className={`text-2xl font-black tracking-tighter ${selectedDay === d.id ? 'text-[#b0c495]' : 'text-[#6e8550]'}`}>
+              <span className={`text-3xl font-black tracking-tighter ${selectedDay === d.id ? 'text-[#ffe082]' : 'text-[#ff6d00]'}`}>
                 {d.dateStr}
               </span>
             </button>
           ))}
         </div>
 
-        {/* 3. 第二層：組別選擇 */}
+        {/* 3. 第二層：組別選擇 (卡片背景換成淺綠色) */}
         <div className="grid grid-cols-2 gap-6">
           {TYPES.map(t => (
             <button 
@@ -171,12 +168,12 @@ export default function Home() {
               onClick={() => setSelectedType(t.id)} 
               className={`p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${
                 selectedType === t.id 
-                  ? 'bg-white text-[#1e291b] border-[#1e291b] scale-102' 
-                  : 'bg-white/60 text-[#5a6b55] border-transparent hover:text-[#1e291b]'
+                  ? 'bg-[#D9EAD3] text-[#0070C0] border-[#0070C0] scale-102' 
+                  : 'bg-white text-[#718096] border-transparent hover:text-[#0070C0]'
               }`}
             >
-              <span className="text-2xl">{t.label}</span>
-              <span className={`text-lg ${selectedType === t.id ? 'text-[#6e8550] font-bold' : 'text-[#9caaa4]'}`}>
+              <span className="text-3xl">{t.label}</span>
+              <span className={`text-xl ${selectedType === t.id ? 'text-[#0070C0] font-bold' : 'text-slate-400'}`}>
                 ({t.note})
               </span>
             </button>
@@ -184,32 +181,32 @@ export default function Home() {
         </div>
 
         {/* 4. 中間看板 */}
-        <div className="bg-white/80 border border-white rounded-2xl p-6 text-center space-y-2 shadow-sm">
-          <div className="text-3xl font-black text-[#1e291b] tracking-wide">
+        <div className="bg-white border border-[#0070C0]/20 rounded-2xl p-6 text-center space-y-2 shadow-sm">
+          <div className="text-4xl font-black text-[#0070C0] tracking-wide">
             ⏰ 活動時間：19:00 - 21:20
           </div>
-          <div className="text-lg text-[#6e8550] font-bold">
+          <div className="text-xl text-[#ff6d00] font-bold">
             🔄 每星期六晚上 18:00 準時更新開放下週報名
           </div>
         </div>
 
-        {/* 5. 報名表單 */}
-        <div className="bg-white p-8 rounded-3xl space-y-6 shadow-xl shadow-[#cbd7be]/40">
-          <div className="text-xl font-bold text-[#5b6a57] mb-2 text-center">
+        {/* 5. 報名表單 (卡片背景換成淺綠色) */}
+        <div className="bg-[#D9EAD3] p-8 rounded-3xl space-y-6 shadow-xl border border-[#b6d7a8]">
+          <div className="text-2xl font-bold text-[#0070C0] mb-2 text-center">
             您正在報名：
-            <span className="text-[#1e291b] font-black">
+            <span className="text-[#0070C0] font-black underline underline-offset-8">
               {DAYS.find(d => d.id === selectedDay)?.label} ({activeDate}) - {TYPES.find(t => t.id === selectedType)?.label} 
             </span>
           </div>
 
           <input 
-            className="w-full p-6 bg-slate-50 rounded-2xl border border-slate-200 focus:border-[#1e291b] focus:outline-none text-2xl text-[#1e291b]" 
+            className="w-full p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-3xl text-[#1a1a1a]" 
             placeholder="輸入暱稱" 
             value={form.name} 
             onChange={e => setForm({...form, name: e.target.value})} 
           />
           <select 
-            className="w-full p-6 bg-slate-50 rounded-2xl border border-slate-200 focus:border-[#1e291b] focus:outline-none text-2xl text-[#1e291b]" 
+            className="w-full p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-3xl text-[#1a1a1a]" 
             value={form.count} 
             onChange={e => setForm({...form, count: e.target.value})}
           >
@@ -217,14 +214,14 @@ export default function Home() {
             <option value="2">2 位</option>
           </select>
           <input 
-            className="w-full p-6 bg-slate-50 rounded-2xl border border-slate-200 focus:border-[#1e291b] focus:outline-none text-2xl text-[#1e291b]" 
+            className="w-full p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-3xl text-[#1a1a1a]" 
             type="password" 
             placeholder="取消密碼 (4位數字)" 
             maxLength={4} 
             value={form.password} 
             onChange={e => setForm({...form, password: e.target.value})} 
           />
-          <button className="w-full bg-[#1e291b] text-white p-6 rounded-2xl text-2xl font-black hover:bg-[#2d3d29] transition-all mt-4 shadow-lg" onClick={submit}>
+          <button className="w-full bg-[#0070C0] text-white p-6 rounded-2xl text-3xl font-black hover:bg-[#005a9c] transition-all mt-4 shadow-lg active:scale-95" onClick={submit}>
             確認報名 (滿額自動改備取)
           </button>
         </div>
@@ -232,35 +229,35 @@ export default function Home() {
         {/* 6. 名單顯示 */}
         <div className="space-y-6">
           <div className="flex justify-between items-center px-2">
-            <h2 className="text-3xl font-black tracking-wide text-[#1e291b]">
-              正取人數：<span className="text-[#6e8550]">{currentTotal}</span> / 8
+            <h2 className="text-4xl font-black tracking-wide text-[#0070C0]">
+              正取人數：<span className="text-[#ff6d00]">{currentTotal}</span> / 8
             </h2>
-            {currentTotal >= 8 && <span className="text-lg bg-red-100 text-red-600 font-black px-4 py-2 rounded-xl">正取已滿</span>}
+            {currentTotal >= 8 && <span className="text-xl bg-[#ffebee] text-[#c62828] font-black px-4 py-2 rounded-xl border border-[#ef9a9a]">正取已滿</span>}
           </div>
           
           {mainList.length === 0 ? (
-            <div className="text-center py-12 text-xl text-[#75846f] border-2 border-dashed border-white rounded-2xl bg-white/40">目前暫無報名球友</div>
+            <div className="text-center py-12 text-2xl text-[#718096] border-2 border-dashed border-[#0070C0]/20 rounded-2xl bg-white/40">目前暫無報名球友</div>
           ) : (
             <div className="space-y-4">
               {mainList.map((item) => (
-                <div key={item.id} className="bg-white p-6 rounded-2xl flex justify-between items-center shadow-sm">
-                  <span className="text-2xl font-bold tracking-wide text-[#1e291b]">{item.name} <span className="text-[#6e8550] text-xl ml-3">({item.count}位)</span></span>
-                  <button className="text-red-500 hover:text-red-700 text-lg font-black bg-red-50 px-4 py-2 rounded-xl transition-colors" onClick={() => handleDelete(item)}>取消</button>
+                <div key={item.id} className="bg-white p-6 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
+                  <span className="text-3xl font-bold tracking-wide text-[#2d3748]">{item.name} <span className="text-[#0070C0] text-2xl ml-3">({item.count}位)</span></span>
+                  <button className="text-[#c62828] hover:text-[#b71c1c] text-xl font-black bg-red-50 px-4 py-2 rounded-xl transition-colors" onClick={() => handleDelete(item)}>取消</button>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* 7. 備取名單 */}
+        {/* 7. 備取名單 (卡片背景換成淺綠色) */}
         {waitList.length > 0 && (
-          <div className="space-y-6 pt-6 border-t border-[#c6d2b5]">
-            <h2 className="text-3xl font-black text-[#966b1d] px-2">遞補備取：{totalWaitCount} 位</h2>
+          <div className="space-y-6 pt-6 border-t-2 border-dashed border-[#0070C0]/20">
+            <h2 className="text-4xl font-black text-[#ff6d00] px-2">遞補備取：{totalWaitCount} 位</h2>
             <div className="space-y-4">
               {waitList.map((item, index) => (
-                <div key={item.id} className="bg-white/80 p-6 rounded-2xl flex justify-between items-center shadow-sm border border-[#d6e0c7]">
-                  <span className="text-2xl font-bold text-[#475443]"><span className="text-[#a87922] mr-2">[備取 {index + 1}]</span>{item.name} <span className="text-[#a87922]/80 text-xl ml-3">({item.count}位)</span></span>
-                  <button className="text-red-500 hover:text-red-700 text-lg font-black px-4 py-2" onClick={() => handleDelete(item)}>取消</button>
+                <div key={item.id} className="bg-[#D9EAD3] p-6 rounded-2xl flex justify-between items-center border border-[#b6d7a8] shadow-sm">
+                  <span className="text-3xl font-bold text-[#2d3748]"><span className="text-[#ff6d00] mr-2">[備取 {index + 1}]</span>{item.name} <span className="text-[#ff6d00]/80 text-2xl ml-3">({item.count}位)</span></span>
+                  <button className="text-[#c62828] hover:text-[#b71c1c] text-xl font-black px-4 py-2 rounded-xl transition-colors" onClick={() => handleDelete(item)}>取消</button>
                 </div>
               ))}
             </div>
