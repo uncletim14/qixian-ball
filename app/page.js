@@ -7,11 +7,34 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzh
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const DAYS = [
-  { id: 'mon', label: '週一場' },
-  { id: 'fri', label: '週五場' },
-  { id: 'sat', label: '週六場' }
-];
+// ─── 輔助函式：根據每週六 18:00 自動推算本週或下週的指定星期日期 ───
+function getTargetDateStr(targetDayOfWeek) {
+  const now = new Date();
+  
+  // 找出本週六 18:00 的時間點
+  const thisSaturday = new Date(now);
+  const currentDay = now.getDay(); // 0:日, 1:一, ..., 6:六
+  const daysUntilSaturday = 6 - currentDay;
+  thisSaturday.setDate(now.getDate() + daysUntilSaturday);
+  thisSaturday.setHours(18, 0, 0, 0);
+
+  // 判斷是否已經過了週六 18:00，若是，則基準週要往後推一週
+  const baseDate = new Date(now);
+  if (now >= thisSaturday) {
+    baseDate.setDate(now.getDate() + 7);
+  }
+
+  // 根據基準週，計算出該週的星期一、五、六的具體日期
+  const baseDay = baseDate.getDay();
+  const diff = targetDayOfWeek - baseDay;
+  const targetDate = new Date(baseDate);
+  targetDate.setDate(baseDate.getDate() + diff);
+
+  // 格式化成 MM/DD
+  const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(targetDate.getDate()).padStart(2, '0');
+  return `${mm}/${dd}`;
+}
 
 const TYPES = [
   { id: 'experience', label: '新手體驗', note: '免費' },
@@ -19,13 +42,27 @@ const TYPES = [
 ];
 
 export default function Home() {
+  // 動態生成當前開放報名的日期字串
+  const monDate = getTargetDateStr(1); // 星期一
+  const friDate = getTargetDateStr(5); // 星期五
+  const satDate = getTargetDateStr(6); // 星期六
+
+  const DAYS = [
+    { id: 'mon', label: '週一場', dateStr: monDate },
+    { id: 'fri', label: '週五場', dateStr: friDate },
+    { id: 'sat', label: '週六場', dateStr: satDate }
+  ];
+
   const [selectedDay, setSelectedDay] = useState('mon');
   const [selectedType, setSelectedType] = useState('experience');
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  // 組合出唯一的資料庫查詢識別碼
-  const currentSessionId = `${selectedDay}_${selectedType}`;
+  // 抓取當前選中的具體日期數字（例如: "06/15"）
+  const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
+  
+  // 組合唯一的識別碼作為資料庫 session_id：例如 "06/15_experience"
+  const currentSessionId = `${activeDate}_${selectedType}`;
 
   // 載入資料
   const load = async () => {
@@ -41,7 +78,7 @@ export default function Home() {
 
   useEffect(() => { 
     load(); 
-  }, [selectedDay, selectedType]);
+  }, [selectedDay, selectedType, currentSessionId]);
 
   // ─── 核心正備取邏輯計算 ───
   let currentTotal = 0;
@@ -69,10 +106,10 @@ export default function Home() {
       return; 
     }
 
-    // 檢查當前「特定場次特定類型」下是否有重複暱稱
+    // 檢查同日期同分區是否有重複暱稱
     const isNameDuplicate = list.some(item => item.name.toLowerCase() === trimmedName.toLowerCase());
     if (isNameDuplicate) {
-      alert(`❌ 暱稱「${trimmedName}」在此場次的該分區已被使用，請換個名字再報名喔！`);
+      alert(`❌ 暱稱「${trimmedName}」在此場次的該分區已被使用，請換個名字喔！`);
       return;
     }
 
@@ -80,7 +117,7 @@ export default function Home() {
       name: trimmedName, 
       count: parseInt(form.count), 
       password: form.password, 
-      session_id: currentSessionId, 
+      session_id: currentSessionId, // 存入包含日期的識別碼，如 "06/15_experience"
       created_at: new Date().toISOString()
     }]);
 
@@ -126,24 +163,27 @@ export default function Home() {
           </p>
         </div>
 
-        {/* 2. 第一層：星期選擇 */}
+        {/* 2. 第一層：星期與動態日期選擇 */}
         <div className="grid grid-cols-3 gap-6">
           {DAYS.map(d => (
             <button 
               key={d.id} 
               onClick={() => setSelectedDay(d.id)} 
-              className={`p-5 rounded-2xl text-3xl font-black transition-all duration-200 ${
+              className={`p-4 rounded-2xl font-black transition-all duration-200 flex flex-col items-center justify-center gap-1 ${
                 selectedDay === d.id 
                   ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20 scale-105' 
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
-              {d.label}
+              <span className="text-3xl">{d.label}</span>
+              <span className={`text-xl font-bold ${selectedDay === d.id ? 'text-black/70' : 'text-slate-400'}`}>
+                {d.dateStr}
+              </span>
             </button>
           ))}
         </div>
 
-        {/* 3. 第二層：組別類型選擇 (加入免費與100元註記) */}
+        {/* 3. 第二層：組別類型選擇 */}
         <div className="grid grid-cols-2 gap-6">
           {TYPES.map(t => (
             <button 
@@ -178,7 +218,7 @@ export default function Home() {
           <div className="text-2xl font-bold text-slate-400 mb-2 text-center">
             您正在報名：
             <span className="text-emerald-400 font-black">
-              {DAYS.find(d => d.id === selectedDay)?.label} - {TYPES.find(t => t.id === selectedType)?.label} 
+              {DAYS.find(d => d.id === selectedDay)?.label} ({activeDate}) - {TYPES.find(t => t.id === selectedType)?.label} 
               （{TYPES.find(t => t.id === selectedType)?.note}）
             </span>
           </div>
