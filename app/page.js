@@ -113,21 +113,21 @@ export default function Home() {
   };
 
   return (
-    /* 🎨 主背景更換：溫和的美式運動燕麥白 (#f4f1ea) */
-    <main className="min-h-screen bg-[#f4f1ea] text-[#2c3e2e] p-8">
+    /* 🎨 主背景更換：清爽透亮的極淺灰色 (#f0f4f8) */
+    <main className="min-h-screen bg-[#f0f4f8] text-[#1e293b] p-8">
       <div className="max-w-2xl mx-auto space-y-10 py-6">
         
         {/* 1. 頂部大標題區塊 */}
-        <div className="text-center bg-white p-12 rounded-3xl shadow-md border border-[#e3ded2]">
-          <h1 className="text-6xl font-black mb-6 text-[#1c352d] tracking-wider">
+        <div className="text-center bg-white p-12 rounded-3xl shadow-sm border border-blue-100">
+          <h1 className="text-6xl font-black mb-4 text-[#0284c7] tracking-wider">
             七賢國小匹克球交流團
           </h1>
-          <p className="text-3xl text-[#2c3e2e] font-black tracking-widest">
+          <p className="text-2xl text-[#334155] font-black tracking-widest">
             新手免費體驗與新手區報名
           </p>
         </div>
 
-        {/* 2. 第一層：日期按鈕 (選中變深墨綠底 #1c352d) */}
+        {/* 2. 第一層：日期按鈕 (選中變耀眼天藍色 #0284c7) */}
         <div className="grid grid-cols-3 gap-6">
           {DAYS.map(d => (
             <button 
@@ -135,12 +135,12 @@ export default function Home() {
               onClick={() => setSelectedDay(d.id)} 
               className={`p-5 rounded-2xl font-black transition-all duration-200 flex flex-col items-center justify-center gap-2 shadow-sm ${
                 selectedDay === d.id 
-                  ? 'bg-[#1c352d] text-white shadow-xl scale-105' 
-                  : 'bg-white text-[#334d40] hover:bg-[#eae6db]'
+                  ? 'bg-[#0284c7] text-white shadow-xl scale-105' 
+                  : 'bg-white text-[#475569] hover:bg-slate-100'
               }`}
             >
-              <span className="text-3xl">{d.label}</span>
-              <span className={`text-3xl font-black tracking-tighter ${selectedDay === d.id ? 'text-[#c9b074]' : 'text-[#82714a]'}`}>
+              <span className="text-2xl">{d.label}</span>
+              <span className={`text-2xl font-black tracking-tighter ${selectedDay === d.id ? 'text-blue-100' : 'text-[#ea580c]'}`}>
                 {d.dateStr}
               </span>
             </button>
@@ -155,12 +155,12 @@ export default function Home() {
               onClick={() => setSelectedType(t.id)} 
               className={`p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${
                 selectedType === t.id 
-                  ? 'bg-white text-[#1c352d] border-[#1c352d] scale-102' 
-                  : 'bg-white/60 text-[#607368] border-transparent hover:text-[#1c352d]'
+                  ? 'bg-white text-[#0284c7] border-[#0284c7] scale-102' 
+                  : 'bg-white/70 text-[#64748b] border-transparent hover:text-[#0284c7]'
               }`}
             >
-              <span className="text-3xl">{t.label}</span>
-              <span className={`text-xl ${selectedType === t.id ? 'text-[#82714a] font-bold' : 'text-[#9ba8a0]'}`}>
+              <span className="text-2xl">{t.label}</span>
+              <span className={`text-xl ${selectedType === t.id ? 'text-[#ea580c] font-bold' : 'text-slate-400'}`}>
                 ({t.note})
               </span>
             </button>
@@ -168,31 +168,31 @@ export default function Home() {
         </div>
 
         {/* 4. 中間看板 */}
-        <div className="bg-white border border-[#e3ded2] rounded-2xl p-6 text-center space-y-2 shadow-sm">
-          <div className="text-4xl font-black text-[#1c352d] tracking-wide">
+        <div className="bg-white border border-blue-500/10 rounded-2xl p-6 text-center space-y-2 shadow-sm">
+          <div className="text-4xl font-black text-[#0284c7] tracking-wide">
             ⏰ 活動時間：19:00 - 21:20
           </div>
-          <div className="text-xl text-[#82714a] font-bold">
+          <div className="text-xl text-[#ea580c] font-bold">
             🔄 每星期六晚上 18:00 準時更新開放下週報名
           </div>
         </div>
 
         {/* 5. 報名表單 */}
-        <div className="bg-white p-8 rounded-3xl space-y-6 shadow-md border border-[#e3ded2]">
-          <div className="text-2xl font-bold text-[#5c6e65] mb-2 text-center">
+        <div className="bg-white p-8 rounded-3xl space-y-6 shadow-md border border-slate-100">
+          <div className="text-2xl font-bold text-[#475569] mb-2 text-center">
             您正在報名：
-            <span className="text-[#1c352d] font-black">
+            <span className="text-[#0284c7] font-black">
               {DAYS.find(d => d.id === selectedDay)?.label} ({activeDate}) - {TYPES.find(t => t.id === selectedType)?.label} 
             </span>
           </div>
 
-          <input className="w-full p-6 bg-[#f9f8f6] rounded-2xl border border-[#e3ded2] focus:border-[#1c352d] focus:outline-none text-3xl text-[#1c352d]" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-          <select className="w-full p-6 bg-[#f9f8f6] rounded-2xl border border-[#e3ded2] focus:border-[#1c352d] focus:outline-none text-3xl text-[#1c352d]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
+          <input className="w-full p-6 bg-slate-50 rounded-2xl border border-slate-200 focus:border-[#0284c7] focus:outline-none text-3xl text-[#1e293b]" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+          <select className="w-full p-6 bg-slate-50 rounded-2xl border border-slate-200 focus:border-[#0284c7] focus:outline-none text-3xl text-[#1e293b]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
             <option value="1">1 位</option>
             <option value="2">2 位</option>
           </select>
-          <input className="w-full p-6 bg-[#f9f8f6] rounded-2xl border border-[#e3ded2] focus:border-[#1c352d] focus:outline-none text-3xl text-[#1c352d]" type="password" placeholder="取消密碼 (4位數字)" maxLength={4} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-          <button className="w-full bg-[#1c352d] text-white p-6 rounded-2xl text-3xl font-black hover:bg-[#28493e] transition-all mt-4 shadow-md" onClick={submit}>
+          <input className="w-full p-6 bg-slate-50 rounded-2xl border border-slate-200 focus:border-[#0284c7] focus:outline-none text-3xl text-[#1e293b]" type="password" placeholder="取消密碼 (4位數字)" maxLength={4} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+          <button className="w-full bg-[#0284c7] text-white p-6 rounded-2xl text-3xl font-black hover:bg-[#0369a1] transition-all mt-4 shadow-md" onClick={submit}>
             確認報名 (滿額自動改備取)
           </button>
         </div>
@@ -200,20 +200,20 @@ export default function Home() {
         {/* 6. 名單顯示 */}
         <div className="space-y-6">
           <div className="flex justify-between items-center px-2">
-            <h2 className="text-4xl font-black tracking-wide text-[#1c352d]">
-              正取人數：<span className="text-[#82714a]">{currentTotal}</span> / 8
+            <h2 className="text-4xl font-black tracking-wide text-[#0284c7]">
+              正取人數：<span className="text-[#ea580c]">{currentTotal}</span> / 8
             </h2>
-            {currentTotal >= 8 && <span className="text-xl bg-red-50 text-red-700 font-black px-4 py-2 rounded-xl">正取已滿</span>}
+            {currentTotal >= 8 && <span className="text-xl bg-orange-50 text-orange-600 font-black px-4 py-2 rounded-xl">正取已滿</span>}
           </div>
           
           {mainList.length === 0 ? (
-            <div className="text-center py-12 text-2xl text-[#7e8f85] border-2 border-dashed border-[#e3ded2] rounded-2xl bg-white/40">目前暫無報名球友</div>
+            <div className="text-center py-12 text-2xl text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-white/40">目前暫無報名球友</div>
           ) : (
             <div className="space-y-4">
               {mainList.map((item) => (
-                <div key={item.id} className="bg-white p-6 rounded-2xl flex justify-between items-center shadow-sm border border-[#e3ded2]">
-                  <span className="text-3xl font-bold tracking-wide text-[#1c352d]">{item.name} <span className="text-[#82714a] text-2xl ml-3">({item.count}位)</span></span>
-                  <button className="text-red-600 hover:text-red-800 text-xl font-black bg-red-50 px-4 py-2 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
+                <div key={item.id} className="bg-white p-6 rounded-2xl flex justify-between items-center shadow-sm">
+                  <span className="text-3xl font-bold tracking-wide text-[#1e293b]">{item.name} <span className="text-[#ea580c] text-2xl ml-3">({item.count}位)</span></span>
+                  <button className="text-red-500 hover:text-red-700 text-xl font-black bg-red-50 px-4 py-2 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
                 </div>
               ))}
             </div>
@@ -222,13 +222,13 @@ export default function Home() {
 
         {/* 7. 備取名單 */}
         {waitList.length > 0 && (
-          <div className="space-y-6 pt-6 border-t border-[#e3ded2]">
-            <h2 className="text-4xl font-black text-[#a67c1e] px-2">遞補備取：{totalWaitCount} 位</h2>
+          <div className="space-y-6 pt-6 border-t border-slate-200">
+            <h2 className="text-4xl font-black text-[#d97706] px-2">遞補備取：{totalWaitCount} 位</h2>
             <div className="space-y-4">
               {waitList.map((item, index) => (
-                <div key={item.id} className="bg-white/80 p-6 rounded-2xl flex justify-between items-center shadow-sm border border-[#ebdcb9]">
-                  <span className="text-3xl font-bold text-[#4a544f]"><span className="text-[#a67c1e] mr-2">[備取 {index + 1}]</span>{item.name} <span className="text-[#a67c1e]/80 text-2xl ml-3">({item.count}位)</span></span>
-                  <button className="text-red-600 hover:text-red-800 text-xl font-black px-4 py-2" onClick={() => handleDelete(item)}>取消</button>
+                <div key={item.id} className="bg-white/80 p-6 rounded-2xl flex justify-between items-center shadow-sm border border-amber-200">
+                  <span className="text-3xl font-bold text-slate-600"><span className="text-[#d97706] mr-2">[備取 {index + 1}]</span>{item.name} <span className="text-[#d97706]/85 text-2xl ml-3">({item.count}位)</span></span>
+                  <button className="text-red-500 hover:text-red-700 text-xl font-black px-4 py-2" onClick={() => handleDelete(item)}>取消</button>
                 </div>
               ))}
             </div>
