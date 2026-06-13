@@ -31,11 +31,6 @@ function getTargetDateStr(targetDayOfWeek) {
   return `${mm}/${dd}`;
 }
 
-const TYPES = [
-  { id: 'experience', label: '新手體驗', note: '免費' },
-  { id: 'normal', label: '新手區', note: '100元/人' }
-];
-
 export default function Home() {
   const monDate = getTargetDateStr(1);
   const friDate = getTargetDateStr(5);
@@ -47,10 +42,27 @@ export default function Home() {
     { id: 'sat', label: '週六場', dateStr: satDate }
   ];
 
-  const [selectedDay, setSelectedDay] = useState('mon');
+  const [selectedDay, setSelectedDay] = useState('fri'); // ✨ 預設切換到有開放的週五
   const [selectedType, setSelectedType] = useState('experience');
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
+
+  // ─── ✨ 開放權限判定邏輯 ✨ ───
+  // 只有「週五」的「新手體驗」是開放的，其餘皆不開放
+  const isAvailable = selectedDay === 'fri' && selectedType === 'experience';
+
+  const TYPES = [
+    { 
+      id: 'experience', 
+      label: '新手體驗', 
+      note: selectedDay === 'fri' ? '免費' : '本週無開放' // 週五以外顯示無開放
+    },
+    { 
+      id: 'normal', 
+      label: '新手區', 
+      note: '本週無開放' // 新手區一律無開放
+    }
+  ];
 
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
@@ -87,6 +99,11 @@ export default function Home() {
   const totalWaitCount = waitList.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
 
   const submit = async () => {
+    if (!isAvailable) {
+      alert('本分區本週無開放報名喔！');
+      return;
+    }
+
     const trimmedName = form.name.trim();
     if (!trimmedName || form.password.length !== 4) { 
       alert('請輸入暱稱與 4 位密碼'); 
@@ -123,13 +140,11 @@ export default function Home() {
   };
 
   return (
-    /* 主背景維持藍綠色淺色調風格 */
     <main className="min-h-screen bg-[#f0f4f8] text-[#2d3748] p-4 sm:p-8">
       <div className="max-w-2xl mx-auto space-y-6 sm:space-y-10 py-2 sm:py-6">
         
-        {/* 1. 頂部大標題區塊（優化手機版字體大小，縮小避免斷行） */}
-        <div className="text-center bg-[#D9EAD3] p-6 sm:p-12 rounded-3xl shadow-sm border border-[#b6d7a8]">
-          {/* ✨ 手機版縮小為 text-3xl 至 text-4xl，電腦版維持 text-6xl */}
+        {/* 1. 頂部大標題區塊 */}
+        <div className="text-center bg-[#D9EAD3] p-6 sm:p-12 rounded-3xl shadow-md border border-[#b6d7a8]">
           <h1 className="text-3xl sm:text-6xl font-black text-[#0070C0] tracking-wider leading-tight">
             七賢國小匹克球
           </h1>
@@ -141,19 +156,25 @@ export default function Home() {
           </p>
         </div>
 
-        {/* 2. 第一層：日期按鈕 */}
+        {/* 2. 第一層：日期按鈕 (週一、週六右上角增加無開放標記提示) */}
         <div className="grid grid-cols-3 gap-3 sm:gap-6">
           {DAYS.map(d => (
             <button 
               key={d.id} 
               onClick={() => setSelectedDay(d.id)} 
-              className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 flex flex-col items-center justify-center gap-1 sm:gap-2 shadow-sm ${
+              className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 flex flex-col items-center justify-center gap-1 sm:gap-2 shadow-sm relative ${
                 selectedDay === d.id 
                   ? 'bg-[#0070C0] text-white shadow-xl scale-105 border-[#0070C0]' 
                   : 'bg-white text-[#4a5568] hover:bg-slate-50 border-white'
               } border-2`}
             >
-              <span className="text-lg sm:text-2xl">{d.label}</span>
+              {/* ✨ 如果是週一或週六，加上小字提示 */}
+              {(d.id === 'mon' || d.id === 'sat') && (
+                <span className={`absolute top-1 text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded ${selectedDay === d.id ? 'bg-red-600 text-white' : 'bg-red-100 text-red-600'}`}>
+                  無開放
+                </span>
+              )}
+              <span className="text-lg sm:text-2xl mt-2 sm:mt-0">{d.label}</span>
               <span className={`text-xl sm:text-3xl font-black tracking-tighter ${selectedDay === d.id ? 'text-[#ffe082]' : 'text-[#ff6d00]'}`}>
                 {d.dateStr}
               </span>
@@ -174,7 +195,8 @@ export default function Home() {
               }`}
             >
               <span className="text-xl sm:text-3xl">{t.label}</span>
-              <span className={`text-base sm:text-xl ${selectedType === t.id ? 'text-[#0070C0] font-bold' : 'text-slate-400'}`}>
+              {/* ✨ 備註字體動態顯示費用或本週無開放 */}
+              <span className={`text-base sm:text-xl ${t.note === '本週無開放' ? 'text-red-500 font-bold' : (selectedType === t.id ? 'text-[#0070C0] font-bold' : 'text-slate-400')}`}>
                 ({t.note})
               </span>
             </button>
@@ -191,43 +213,58 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 5. 報名表單（隱藏「您正在報名：」，優化文字緊湊度） */}
-        <div className="bg-[#D9EAD3] p-5 sm:p-8 rounded-3xl space-y-4 sm:space-y-6 shadow-xl border border-[#b6d7a8]">
-          {/* ✨ 修正點：刪除「您正在報名：」，直接乾淨顯示時間與項目 */}
-          <div className="text-xl sm:text-2xl text-center">
-            <span className="text-[#0070C0] font-black underline underline-offset-8 decoration-2">
-              {DAYS.find(d => d.id === selectedDay)?.label} ({activeDate}) - {TYPES.find(t => t.id === selectedType)?.label} 
-            </span>
-          </div>
+        {/* 5. 報名表單 (未開放時自動變成警告看板) */}
+        <div className="bg-[#D9EAD3] p-5 sm:p-8 rounded-3xl shadow-xl border border-[#b6d7a8]">
+          {isAvailable ? (
+            /* 🔓 有開放時顯示的正常表單 */
+            <div className="space-y-4 sm:space-y-6">
+              <div className="text-xl sm:text-2xl text-center">
+                <span className="text-[#0070C0] font-black underline underline-offset-8 decoration-2">
+                  {DAYS.find(d => d.id === selectedDay)?.label} ({activeDate}) - {TYPES.find(t => t.id === selectedType)?.label} 
+                </span>
+              </div>
 
-          <input 
-            className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
-            placeholder="輸入暱稱" 
-            value={form.name} 
-            onChange={e => setForm({...form, name: e.target.value})} 
-          />
-          <select 
-            className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
-            value={form.count} 
-            onChange={e => setForm({...form, count: e.target.value})}
-          >
-            <option value="1">1 位</option>
-            <option value="2">2 位</option>
-          </select>
-          <input 
-            className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
-            type="password" 
-            placeholder="取消密碼 (4位數字)" 
-            maxLength={4} 
-            value={form.password} 
-            onChange={e => setForm({...form, password: e.target.value})} 
-          />
-          <button className="w-full bg-[#0070C0] text-white p-4 sm:p-6 rounded-2xl text-xl sm:text-3xl font-black hover:bg-[#005a9c] transition-all mt-2 shadow-lg active:scale-95" onClick={submit}>
-            確認報名 (滿額自動改備取)
-          </button>
+              <input 
+                className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
+                placeholder="輸入暱稱" 
+                value={form.name} 
+                onChange={e => setForm({...form, name: e.target.value})} 
+              />
+              <select 
+                className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
+                value={form.count} 
+                onChange={e => setForm({...form, count: e.target.value})}
+              >
+                <option value="1">1 位</option>
+                <option value="2">2 位</option>
+              </select>
+              <input 
+                className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
+                type="password" 
+                placeholder="取消密碼 (4位數字)" 
+                maxLength={4} 
+                value={form.password} 
+                onChange={e => setForm({...form, password: e.target.value})} 
+              />
+              <button className="w-full bg-[#0070C0] text-white p-4 sm:p-6 rounded-2xl text-xl sm:text-3xl font-black hover:bg-[#005a9c] transition-all mt-2 shadow-lg active:scale-95" onClick={submit}>
+                確認報名 (滿額自動改備取)
+              </button>
+            </div>
+          ) : (
+            /* 🔒 無開放時顯示的防呆看板 */
+            <div className="text-center py-6 space-y-3">
+              <div className="text-5xl">🚫</div>
+              <div className="text-2xl sm:text-3xl font-black text-red-600">
+                本週此分區無開放
+              </div>
+              <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
+                請點選上方切換至 <span className="text-[#0070C0]">週五場 - 新手體驗</span> 進行報名喔！
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* 6. 名單顯示 */}
+        {/* 6. 名單顯示 (只有在開放或是該區原本有舊資料時才需要顯示) */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex justify-between items-center px-2">
             <h2 className="text-2xl sm:text-4xl font-black tracking-wide text-[#0070C0]">
