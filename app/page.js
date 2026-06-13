@@ -39,28 +39,34 @@ export default function Home() {
 
   list.forEach(item => {
     const seats = Number(item.count) || 0;
-    // 如果目前人數 + 這組人數 小於等於 8，就是正取
     if (currentTotal + seats <= 8) {
       mainList.push(item);
       currentTotal += seats;
     } else {
-      // 只要有一點點爆掉（例如 7 + 2 = 9），整組直接丟進備取
       waitList.push(item);
     }
   });
 
-  // 備取總人數計算
   const totalWaitCount = waitList.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
 
-  // 送出報名（移除人數上限限制，改為無限開放登記）
+  // 送出報名
   const submit = async () => {
-    if (!form.name.trim() || form.password.length !== 4) { 
+    const trimmedName = form.name.trim();
+
+    if (!trimmedName || form.password.length !== 4) { 
       alert('請輸入暱稱與 4 位密碼'); 
       return; 
     }
 
+    // 🛑 關鍵修正：檢查當前場次是否已有相同的暱稱（不分正備取）
+    const isNameDuplicate = list.some(item => item.name.toLowerCase() === trimmedName.toLowerCase());
+    if (isNameDuplicate) {
+      alert(`❌ 暱稱「${trimmedName}」在此場次已被使用，請換一個名字再報名喔！`);
+      return;
+    }
+
     const { error } = await supabase.from('pickleball_registrations').insert([{
-      name: form.name.trim(), 
+      name: trimmedName, 
       count: parseInt(form.count), 
       password: form.password, 
       session_id: day, 
@@ -164,7 +170,7 @@ export default function Home() {
           </button>
         </div>
 
-        {/* ─── 區塊一：正取名單 ─── */}
+        {/* 正取名單 */}
         <div className="space-y-6">
           <div className="flex justify-between items-center px-2">
             <h2 className="text-3xl font-black tracking-wide">
@@ -200,7 +206,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* ─── 區塊二：備取名單（有資料才會顯示） ─── */}
+        {/* 備取名單 */}
         {waitList.length > 0 && (
           <div className="space-y-6 pt-6 border-t-2 border-dashed border-slate-800">
             <div className="flex justify-between items-center px-2">
