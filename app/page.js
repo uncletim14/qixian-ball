@@ -67,20 +67,21 @@ export default function Home() {
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  const load = async () => {
-    const { data, error } = await supabase
-      .from('pickleball_registrations')
-      .select('id, name, count, session_id')
-      .eq('session_id', currentSessionId)
-      .order('created_at', { ascending: true });
-      
-    if (error) console.error('讀取失敗:', error.message);
-    else if (data) setList(data);
-  };
-
+  // 【已修正】將原本在外部的 load() 完整移入 useEffect 內部，避免 dependency 缺失警告
   useEffect(() => { 
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('pickleball_registrations')
+        .select('id, name, count, session_id')
+        .eq('session_id', currentSessionId)
+        .order('created_at', { ascending: true });
+        
+      if (error) console.error('讀取失敗:', error.message);
+      else if (data) setList(data);
+    };
+
     load(); 
-  }, [selectedDay, selectedType, currentSessionId]);
+  }, [currentSessionId]); // 依賴項精簡為 currentSessionId，只要切換日期或組別，對應的 sessionId 改變就會自動重新抓取
 
   let currentTotal = 0;
   const mainList = [];
@@ -98,6 +99,18 @@ export default function Home() {
 
   const totalWaitCount = waitList.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
 
+  // 用於在提交或刪除成功後「手動觸發刷新資料」的輔助函式
+  const refreshData = async () => {
+    const { data, error } = await supabase
+      .from('pickleball_registrations')
+      .select('id, name, count, session_id')
+      .eq('session_id', currentSessionId)
+      .order('created_at', { ascending: true });
+      
+    if (error) console.error('讀取失敗:', error.message);
+    else if (data) setList(data);
+  };
+
   const submit = async () => {
     if (!isAvailable) {
       alert('本分區本週無開放報名喔！');
@@ -107,7 +120,7 @@ export default function Home() {
     const trimmedName = form.name.trim();
     if (!trimmedName || form.password.length !== 4) { 
       alert('請輸入暱稱與 4 位密碼'); 
-      return; 
+        return; 
     }
     const isNameDuplicate = list.some(item => item.name.toLowerCase() === trimmedName.toLowerCase());
     if (isNameDuplicate) {
@@ -127,7 +140,7 @@ export default function Home() {
     else { 
       alert('登記成功！'); 
       setForm({ name: '', count: '1', password: '' }); 
-      load(); 
+      refreshData(); 
     }
   };
 
@@ -136,7 +149,7 @@ export default function Home() {
     if (!pwd) return;
     const { error } = await supabase.from('pickleball_registrations').delete().eq('id', item.id).eq('password', pwd);
     if (error) alert('系統錯誤：' + error.message);
-    else { alert('取消成功！'); load(); }
+    else { alert('取消成功！'); refreshData(); }
   };
 
   return (
