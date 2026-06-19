@@ -42,32 +42,31 @@ export default function Home() {
     { id: 'sat', label: '週六場', dateStr: satDate }
   ];
 
-  const [selectedDay, setSelectedDay] = useState('fri'); // ✨ 預設切換到有開放的週五
-  const [selectedType, setSelectedType] = useState('experience');
+  const [selectedDay, setSelectedDay] = useState('fri'); // 預設切換到週五
+  const [selectedType, setSelectedType] = useState('normal'); // ✨ 預設改為有開放的「新手區」
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
   // ─── ✨ 開放權限判定邏輯 ✨ ───
-  // 只有「週五」的「新手體驗」是開放的，其餘皆不開放
-  const isAvailable = selectedDay === 'fri' && selectedType === 'experience';
+  // 週一、週五、週六都「只有開放新手區 (normal)」，新手體驗 (experience) 一律不開放
+  const isAvailable = selectedType === 'normal';
 
   const TYPES = [
     { 
       id: 'experience', 
       label: '新手體驗', 
-      note: selectedDay === 'fri' ? '免費' : '本週無開放' // 週五以外顯示無開放
+      note: '本週無開放' // ✨ 新手體驗一律無開放
     },
     { 
       id: 'normal', 
       label: '新手區', 
-      note: '本週無開放' // 新手區一律無開放
+      note: '開放報名' // ✨ 新手區一律開放
     }
   ];
 
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  // 【已修正】將原本在外部的 load() 完整移入 useEffect 內部，避免 dependency 缺失警告
   useEffect(() => { 
     const load = async () => {
       const { data, error } = await supabase
@@ -81,7 +80,7 @@ export default function Home() {
     };
 
     load(); 
-  }, [currentSessionId]); // 依賴項精簡為 currentSessionId，只要切換日期或組別，對應的 sessionId 改變就會自動重新抓取
+  }, [currentSessionId]);
 
   let currentTotal = 0;
   const mainList = [];
@@ -99,7 +98,6 @@ export default function Home() {
 
   const totalWaitCount = waitList.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
 
-  // 用於在提交或刪除成功後「手動觸發刷新資料」的輔助函式
   const refreshData = async () => {
     const { data, error } = await supabase
       .from('pickleball_registrations')
@@ -169,7 +167,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* 2. 第一層：日期按鈕 (週一、週六右上角增加無開放標記提示) */}
+        {/* 2. 第一層：日期按鈕 (移除了原本週一與週六的「無開放」紅標提示，因為現在每天的新手區都開放) */}
         <div className="grid grid-cols-3 gap-3 sm:gap-6">
           {DAYS.map(d => (
             <button 
@@ -181,12 +179,6 @@ export default function Home() {
                   : 'bg-white text-[#4a5568] hover:bg-slate-50 border-white'
               } border-2`}
             >
-              {/* ✨ 如果是週一或週六，加上小字提示 */}
-              {(d.id === 'mon' || d.id === 'sat') && (
-                <span className={`absolute top-1 text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded ${selectedDay === d.id ? 'bg-red-600 text-white' : 'bg-red-100 text-red-600'}`}>
-                  無開放
-                </span>
-              )}
               <span className="text-lg sm:text-2xl mt-2 sm:mt-0">{d.label}</span>
               <span className={`text-xl sm:text-3xl font-black tracking-tighter ${selectedDay === d.id ? 'text-[#ffe082]' : 'text-[#ff6d00]'}`}>
                 {d.dateStr}
@@ -208,7 +200,6 @@ export default function Home() {
               }`}
             >
               <span className="text-xl sm:text-3xl">{t.label}</span>
-              {/* ✨ 備註字體動態顯示費用或本週無開放 */}
               <span className={`text-base sm:text-xl ${t.note === '本週無開放' ? 'text-red-500 font-bold' : (selectedType === t.id ? 'text-[#0070C0] font-bold' : 'text-slate-400')}`}>
                 ({t.note})
               </span>
@@ -226,7 +217,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 5. 報名表單 (未開放時自動變成警告看板) */}
+        {/* 5. 報名表單 */}
         <div className="bg-[#D9EAD3] p-5 sm:p-8 rounded-3xl shadow-xl border border-[#b6d7a8]">
           {isAvailable ? (
             /* 🔓 有開放時顯示的正常表單 */
@@ -271,13 +262,13 @@ export default function Home() {
                 本週此分區無開放
               </div>
               <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
-                請點選上方切換至 <span className="text-[#0070C0]">週五場 - 新手體驗</span> 進行報名喔！
+                請點選上方切換至 <span className="text-[#0070C0]">新手區</span> 進行報名喔！
               </div>
             </div>
           )}
         </div>
 
-        {/* 6. 名單顯示 (只有在開放或是該區原本有舊資料時才需要顯示) */}
+        {/* 6. 名單顯示 */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex justify-between items-center px-2">
             <h2 className="text-2xl sm:text-4xl font-black tracking-wide text-[#0070C0]">
