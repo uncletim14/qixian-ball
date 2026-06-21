@@ -7,40 +7,35 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzh
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── 輔助函式：修正後的日期推算邏輯 ───
+// ─── 輔助函式：精準修正後的日期推算邏輯 ───
 function getTargetDateStr(targetDayOfWeek) {
   const now = new Date();
   const currentDay = now.getDay(); // 0 是週日, 1-6 是週一到週六
   
-  // 建立一個本週日中午 12:00 的時間點作為切換基準
+  // 建立一個本週日中午 12:00 的基準線
   const thisSunday = new Date(now);
   const daysUntilSunday = currentDay === 0 ? 0 : 7 - currentDay;
   thisSunday.setDate(now.getDate() + daysUntilSunday);
   thisSunday.setHours(12, 0, 0, 0);
 
-  const baseDate = new Date(now);
-
-  // ✨ 關鍵修正邏輯：
-  // 1. 如果今天是星期六(6)，代表本週六場已經開打了，此時填寫的一定是「下週場次」
-  // 2. 如果今天是星期日(0)且時間已經跨過中午 12:00，那也是要看「新的一週」
+  // 1. 決定我們要找的「目標週」的週日是哪一天
+  const targetSunday = new Date(now);
   if (currentDay === 6 || now >= thisSunday) {
-    // 如果是星期六，或是星期日中午12點後，基準日都切換到「下週的週日」
-    baseDate.setDate(now.getDate() + (currentDay === 6 ? 1 : daysUntilSunday));
+    // 如果是星期六，或是星期日中午 12 點後，代表這週末要報名的是「下一週」的場次
+    targetSunday.setDate(now.getDate() + (currentDay === 6 ? 1 : daysUntilSunday));
   } else {
-    // 星期一到星期五，以及星期日中午12點前，基準日維持在本週日
-    baseDate.setDate(now.getDate() + (currentDay === 0 ? 0 : daysUntilSunday));
+    // 星期一到五，或是星期日中午 12 點前，看的仍是當前這一週的場次
+    targetSunday.setDate(now.getDate() + (currentDay === 0 ? 0 : daysUntilSunday));
   }
 
-  // 將週日的 0 視為 7，方便進行減法推算週一(1)、週五(5)、週六(6)的正確日期
-  const baseDay = baseDate.getDay();
-  const adjustedBaseDay = baseDay === 0 ? 7 : baseDay;
-  const diff = targetDayOfWeek - adjustedBaseDay;
-  
-  const targetDate = new Date(baseDate);
-  targetDate.setDate(baseDate.getDate() + diff);
+  // 2. 以該週日(視為該週的最後一天)為基準，往前推算週一(-6)、週五(-2)、週六(-1)的正確日期
+  const resultDate = new Date(targetSunday);
+  if (targetDayOfWeek === 1) resultDate.setDate(targetSunday.getDate() - 6); // 週一
+  if (targetDayOfWeek === 5) resultDate.setDate(targetSunday.getDate() - 2); // 週五
+  if (targetDayOfWeek === 6) resultDate.setDate(targetSunday.getDate() - 1); // 週六
 
-  const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
-  const dd = String(targetDate.getDate()).padStart(2, '0');
+  const mm = String(resultDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(resultDate.getDate()).padStart(2, '0');
   return `${mm}/${dd}`;
 }
 
