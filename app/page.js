@@ -7,22 +7,35 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzh
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── 輔助函式：根據每週六 18:00 自動推算日期 ───
+// ─── 輔助函式：修正後的日期推算邏輯 ───
 function getTargetDateStr(targetDayOfWeek) {
   const now = new Date();
-  const thisSaturday = new Date(now);
-  const currentDay = now.getDay(); 
-  const daysUntilSaturday = 6 - currentDay;
-  thisSaturday.setDate(now.getDate() + daysUntilSaturday);
-  thisSaturday.setHours(18, 0, 0, 0);
+  const currentDay = now.getDay(); // 0 是週日, 1-6 是週一到週六
+  
+  // 建立一個本週日中午 12:00 的時間點作為切換基準
+  const thisSunday = new Date(now);
+  const daysUntilSunday = currentDay === 0 ? 0 : 7 - currentDay;
+  thisSunday.setDate(now.getDate() + daysUntilSunday);
+  thisSunday.setHours(12, 0, 0, 0);
 
   const baseDate = new Date(now);
-  if (now >= thisSaturday) {
-    baseDate.setDate(now.getDate() + 7);
+
+  // ✨ 關鍵修正邏輯：
+  // 1. 如果今天是星期六(6)，代表本週六場已經開打了，此時填寫的一定是「下週場次」
+  // 2. 如果今天是星期日(0)且時間已經跨過中午 12:00，那也是要看「新的一週」
+  if (currentDay === 6 || now >= thisSunday) {
+    // 如果是星期六，或是星期日中午12點後，基準日都切換到「下週的週日」
+    baseDate.setDate(now.getDate() + (currentDay === 6 ? 1 : daysUntilSunday));
+  } else {
+    // 星期一到星期五，以及星期日中午12點前，基準日維持在本週日
+    baseDate.setDate(now.getDate() + (currentDay === 0 ? 0 : daysUntilSunday));
   }
 
+  // 將週日的 0 視為 7，方便進行減法推算週一(1)、週五(5)、週六(6)的正確日期
   const baseDay = baseDate.getDay();
-  const diff = targetDayOfWeek - baseDay;
+  const adjustedBaseDay = baseDay === 0 ? 7 : baseDay;
+  const diff = targetDayOfWeek - adjustedBaseDay;
+  
   const targetDate = new Date(baseDate);
   targetDate.setDate(baseDate.getDate() + diff);
 
@@ -43,11 +56,11 @@ export default function Home() {
   ];
 
   const [selectedDay, setSelectedDay] = useState('fri'); // 預設切換到週五
-  const [selectedType, setSelectedType] = useState('normal'); // ✨ 預設改為有開放的「新手區」
+  const [selectedType, setSelectedType] = useState('normal'); // 預設為有開放的「新手區」
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  // ─── ✨ 開放權限判定邏輯 ✨ ───
+  // ─── 開放權限判定邏輯 ───
   // 週一、週五、週六都「只有開放新手區 (normal)」，新手體驗 (experience) 一律不開放
   const isAvailable = selectedType === 'normal';
 
@@ -55,12 +68,12 @@ export default function Home() {
     { 
       id: 'experience', 
       label: '新手體驗', 
-      note: '本週無開放' // ✨ 新手體驗一律無開放
+      note: '本週無開放' 
     },
     { 
       id: 'normal', 
       label: '新手區', 
-      note: '開放報名' // ✨ 新手區一律開放
+      note: '開放報名' 
     }
   ];
 
@@ -167,7 +180,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* 2. 第一層：日期按鈕 (移除了原本週一與週六的「無開放」紅標提示，因為現在每天的新手區都開放) */}
+        {/* 2. 第一層：日期按鈕 */}
         <div className="grid grid-cols-3 gap-3 sm:gap-6">
           {DAYS.map(d => (
             <button 
@@ -213,14 +226,13 @@ export default function Home() {
             ⏰ 活動時間：19:00 - 21:20
           </div>
           <div className="text-base sm:text-xl text-[#ff6d00] font-bold">
-            🔄 每星期六晚上 18:00 準時更新開放下週報名
+            🔄 每星期日中午 12:00 準時更新開放下週報名
           </div>
         </div>
 
         {/* 5. 報名表單 */}
         <div className="bg-[#D9EAD3] p-5 sm:p-8 rounded-3xl shadow-xl border border-[#b6d7a8]">
           {isAvailable ? (
-            /* 🔓 有開放時顯示的正常表單 */
             <div className="space-y-4 sm:space-y-6">
               <div className="text-xl sm:text-2xl text-center">
                 <span className="text-[#0070C0] font-black underline underline-offset-8 decoration-2">
@@ -255,7 +267,6 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            /* 🔒 無開放時顯示的防呆看板 */
             <div className="text-center py-6 space-y-3">
               <div className="text-5xl">🚫</div>
               <div className="text-2xl sm:text-3xl font-black text-red-600">
