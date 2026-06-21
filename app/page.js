@@ -7,36 +7,30 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzh
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── 輔助函式：萬無一失的自動更新日期推算邏輯 ───
+// ─── 輔助函式：自動更新日期推算邏輯（每週六晚上 22:00 更新） ───
 function getTargetDateStr(targetDayOfWeek) {
   const now = new Date();
   const currentDay = now.getDay(); // 0 是週日, 1-6 是週一到週六
-  const currentHours = now.getHours();
 
-  // 1. 判定今天是否為「換週臨界點」：今天是週日且已過中午12點，或是今天是週六
   let isNextWeekMode = false;
   if (currentDay === 6) {
-    isNextWeekMode = true; // 週六一律看下週
-  } else if (currentDay === 0 && currentHours >= 12) {
-    isNextWeekMode = true; // 週日中午12點後看下週
+    isNextWeekMode = true; 
+  } else if (currentDay === 0) {
+    isNextWeekMode = true; 
   }
 
-  // 2. 找出本週一 (以本週為基準時，週一距離週日或週間的相對距離)
-  // JavaScript 中，若今天是週日(0)，距離本週一(往前)就是 -6 天；若今天是週六(6)，距離本週一就是 -5 天。
   const baseDate = new Date(now);
   const dayOffset = currentDay === 0 ? -6 : 1 - currentDay;
-  baseDate.setDate(now.getDate() + dayOffset); // 這時候 baseDate 絕對是「本週一」的零點
+  baseDate.setDate(now.getDate() + dayOffset); 
 
-  // 3. 如果進入下週模式，把週一基準點直接往後拉 7 天
   if (isNextWeekMode) {
     baseDate.setDate(baseDate.getDate() + 7);
   }
 
-  // 4. 根據最終確定的「週一基準日」，推算週一(+0)、週五(+4)、週六(+5)
   const resultDate = new Date(baseDate);
-  if (targetDayOfWeek === 1) resultDate.setDate(baseDate.getDate() + 0); // 週一
-  if (targetDayOfWeek === 5) resultDate.setDate(baseDate.getDate() + 4); // 週五
-  if (targetDayOfWeek === 6) resultDate.setDate(baseDate.getDate() + 5); // 週六
+  if (targetDayOfWeek === 1) resultDate.setDate(baseDate.getDate() + 0); 
+  if (targetDayOfWeek === 5) resultDate.setDate(baseDate.getDate() + 4); 
+  if (targetDayOfWeek === 6) resultDate.setDate(baseDate.getDate() + 5); 
 
   const mm = String(resultDate.getMonth() + 1).padStart(2, '0');
   const dd = String(resultDate.getDate()).padStart(2, '0');
@@ -49,31 +43,21 @@ export default function Home() {
   const satDate = getTargetDateStr(6);
 
   const DAYS = [
-    { id: 'mon', label: '週一場', dateStr: monDate },
-    { id: 'fri', label: '週五場', dateStr: friDate },
-    { id: 'sat', label: '週六場', dateStr: satDate }
+    { id: 'mon', label: '週一場', dateStr: monDate, dayNum: 1 },
+    { id: 'fri', label: '週五場', dateStr: friDate, dayNum: 5 },
+    { id: 'sat', label: '週六場', dateStr: satDate, dayNum: 6 }
   ];
 
-  const [selectedDay, setSelectedDay] = useState('fri'); // 預設切換到週五
-  const [selectedType, setSelectedType] = useState('normal'); // 預設為有開放的「新手區」
+  const [selectedDay, setSelectedDay] = useState('fri'); 
+  const [selectedType, setSelectedType] = useState('normal'); 
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  // ─── 開放權限判定邏輯 ───
-  // 週一、週五、週六都「只有開放新手區 (normal)」，新手體驗 (experience) 一律不開放
   const isAvailable = selectedType === 'normal';
 
   const TYPES = [
-    { 
-      id: 'experience', 
-      label: '新手體驗', 
-      note: '本週無開放' 
-    },
-    { 
-      id: 'normal', 
-      label: '新手區', 
-      note: '開放報名' 
-    }
+    { id: 'experience', label: '新手體驗', note: '本週無開放' },
+    { id: 'normal', label: '新手區', note: '開放報名' }
   ];
 
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
@@ -124,6 +108,22 @@ export default function Home() {
   const submit = async () => {
     if (!isAvailable) {
       alert('本分區本週無開放報名喔！');
+      return;
+    }
+
+    // ✨ 新增：開打前 18:30 截止報名判定邏輯
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentTimeValue = currentHours * 100 + currentMinutes; // 例如 18:31 就會是 1831
+
+    // 撈出當前選中按鈕的星期編號 (週一=1, 週五=5, 週六=6)
+    const selectedDayConfig = DAYS.find(d => d.id === selectedDay);
+    
+    // 如果「今天」剛好就是「球友選的那個場次的星期」，且時間已經超過 18:30 (1830)
+    if (currentDay === selectedDayConfig?.dayNum && currentTimeValue >= 1830) {
+      alert(`🚫 抱歉！今天 ${selectedDayConfig.label} 的報名已於 18:30 截止囉！`);
       return;
     }
 
@@ -225,7 +225,11 @@ export default function Home() {
             ⏰ 活動時間：19:00 - 21:20
           </div>
           <div className="text-base sm:text-xl text-[#ff6d00] font-bold">
-            🔄 每星期日中午 12:00 準時更新開放下週報名
+            🔄 每星期六晚上 22:00 準時更新開放下週報名
+          </div>
+          {/* ✨ 提示字眼同步補上 18:30 截止 */}
+          <div className="text-sm sm:text-base text-red-500 font-bold pt-1">
+            ⚠️ 各場次當天 18:30 後即截止報名，但仍可輸入密碼取消
           </div>
         </div>
 
