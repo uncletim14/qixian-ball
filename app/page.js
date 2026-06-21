@@ -7,32 +7,36 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzh
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── 輔助函式：精準修正後的日期推算邏輯 ───
+// ─── 輔助函式：萬無一失的自動更新日期推算邏輯 ───
 function getTargetDateStr(targetDayOfWeek) {
   const now = new Date();
   const currentDay = now.getDay(); // 0 是週日, 1-6 是週一到週六
-  
-  // 建立一個本週日中午 12:00 的基準線
-  const thisSunday = new Date(now);
-  const daysUntilSunday = currentDay === 0 ? 0 : 7 - currentDay;
-  thisSunday.setDate(now.getDate() + daysUntilSunday);
-  thisSunday.setHours(12, 0, 0, 0);
+  const currentHours = now.getHours();
 
-  // 1. 決定我們要找的「目標週」的週日是哪一天
-  const targetSunday = new Date(now);
-  if (currentDay === 6 || now >= thisSunday) {
-    // 如果是星期六，或是星期日中午 12 點後，代表這週末要報名的是「下一週」的場次
-    targetSunday.setDate(now.getDate() + (currentDay === 6 ? 1 : daysUntilSunday));
-  } else {
-    // 星期一到五，或是星期日中午 12 點前，看的仍是當前這一週的場次
-    targetSunday.setDate(now.getDate() + (currentDay === 0 ? 0 : daysUntilSunday));
+  // 1. 判定今天是否為「換週臨界點」：今天是週日且已過中午12點，或是今天是週六
+  let isNextWeekMode = false;
+  if (currentDay === 6) {
+    isNextWeekMode = true; // 週六一律看下週
+  } else if (currentDay === 0 && currentHours >= 12) {
+    isNextWeekMode = true; // 週日中午12點後看下週
   }
 
-  // 2. 以該週日(視為該週的最後一天)為基準，往前推算週一(-6)、週五(-2)、週六(-1)的正確日期
-  const resultDate = new Date(targetSunday);
-  if (targetDayOfWeek === 1) resultDate.setDate(targetSunday.getDate() - 6); // 週一
-  if (targetDayOfWeek === 5) resultDate.setDate(targetSunday.getDate() - 2); // 週五
-  if (targetDayOfWeek === 6) resultDate.setDate(targetSunday.getDate() - 1); // 週六
+  // 2. 找出本週一 (以本週為基準時，週一距離週日或週間的相對距離)
+  // JavaScript 中，若今天是週日(0)，距離本週一(往前)就是 -6 天；若今天是週六(6)，距離本週一就是 -5 天。
+  const baseDate = new Date(now);
+  const dayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+  baseDate.setDate(now.getDate() + dayOffset); // 這時候 baseDate 絕對是「本週一」的零點
+
+  // 3. 如果進入下週模式，把週一基準點直接往後拉 7 天
+  if (isNextWeekMode) {
+    baseDate.setDate(baseDate.getDate() + 7);
+  }
+
+  // 4. 根據最終確定的「週一基準日」，推算週一(+0)、週五(+4)、週六(+5)
+  const resultDate = new Date(baseDate);
+  if (targetDayOfWeek === 1) resultDate.setDate(baseDate.getDate() + 0); // 週一
+  if (targetDayOfWeek === 5) resultDate.setDate(baseDate.getDate() + 4); // 週五
+  if (targetDayOfWeek === 6) resultDate.setDate(baseDate.getDate() + 5); // 週六
 
   const mm = String(resultDate.getMonth() + 1).padStart(2, '0');
   const dd = String(resultDate.getDate()).padStart(2, '0');
