@@ -10,7 +10,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ─── 輔助函式：自動更新日期推算邏輯（每週六晚上 22:00 更新） ───
 function getTargetDateStr(targetDayOfWeek) {
   const now = new Date();
-  const currentDay = now.getDay(); // 0 是週日, 1-6 是週一到週六
+  const currentDay = now.getDay(); 
 
   let isNextWeekMode = false;
   if (currentDay === 6) {
@@ -111,17 +111,14 @@ export default function Home() {
       return;
     }
 
-    // ✨ 新增：開打前 18:30 截止報名判定邏輯
     const now = new Date();
     const currentDay = now.getDay();
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
-    const currentTimeValue = currentHours * 100 + currentMinutes; // 例如 18:31 就會是 1831
+    const currentTimeValue = currentHours * 100 + currentMinutes; 
 
-    // 撈出當前選中按鈕的星期編號 (週一=1, 週五=5, 週六=6)
     const selectedDayConfig = DAYS.find(d => d.id === selectedDay);
     
-    // 如果「今天」剛好就是「球友選的那個場次的星期」，且時間已經超過 18:30 (1830)
     if (currentDay === selectedDayConfig?.dayNum && currentTimeValue >= 1830) {
       alert(`🚫 抱歉！今天 ${selectedDayConfig.label} 的報名已於 18:30 截止囉！`);
       return;
@@ -177,6 +174,10 @@ export default function Home() {
           <p className="text-lg sm:text-2xl text-[#0070C0] font-black tracking-widest border-t border-[#b6d7a8] pt-3 sm:pt-4 mt-4 sm:mt-6">
             新手免費體驗與新手區報名
           </p>
+          {/* ✨ 更新：收費與球拍租借標準註記 */}
+          <div className="mt-3 sm:mt-4 px-4 py-2 bg-white/70 inline-block rounded-2xl text-sm sm:text-lg text-[#ff6d00] font-black shadow-sm border border-[#ffe082] leading-relaxed">
+            💰 新手體驗免費 ｜ 新手區單次 100 元 ｜ 租借球拍一隻 50 元
+          </div>
         </div>
 
         {/* 2. 第一層：日期按鈕 */}
@@ -225,9 +226,8 @@ export default function Home() {
             ⏰ 活動時間：19:00 - 21:20
           </div>
           <div className="text-base sm:text-xl text-[#ff6d00] font-bold">
-            🔄 每星期六晚上 22:00 準時更新開放下週報名
+            🔄 每星期校正晚上 22:00 準時更新開放下週報名
           </div>
-          {/* ✨ 提示字眼同步補上 18:30 截止 */}
           <div className="text-sm sm:text-base text-red-500 font-bold pt-1">
             ⚠️ 各場次當天 18:30 後即截止報名，但仍可輸入密碼取消
           </div>
