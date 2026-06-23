@@ -174,9 +174,12 @@ export default function Home() {
           <p className="text-lg sm:text-2xl text-[#0070C0] font-black tracking-widest border-t border-[#b6d7a8] pt-3 sm:pt-4 mt-4 sm:mt-6">
             新手免費體驗與新手區報名
           </p>
-          {/* ✨ 更新：收費與球拍租借標準註記 */}
-          <div className="mt-3 sm:mt-4 px-4 py-2 bg-white/70 inline-block rounded-2xl text-sm sm:text-lg text-[#ff6d00] font-black shadow-sm border border-[#ffe082] leading-relaxed">
-            💰 新手體驗免費 ｜ 新手區單次 100 元 ｜ 租借球拍一隻 50 元
+          {/* ✨ 優化：分行排版，讓手機版更好閱讀、租借球拍獨立在下方 */}
+          <div className="mt-4 px-4 py-2.5 bg-white/70 inline-flex flex-col items-center justify-center rounded-2xl text-sm sm:text-lg text-[#ff6d00] font-black shadow-sm border border-[#ffe082] space-y-1">
+            <div>💰 新手體驗免費 ｜ 新手區單次 100 元</div>
+            <div className="text-[#0070C0] border-t border-dashed border-[#ffe082] pt-1 w-full text-center">
+              🏓 租借球拍一隻 50 元
+            </div>
           </div>
         </div>
 
@@ -225,8 +228,9 @@ export default function Home() {
           <div className="text-2xl sm:text-4xl font-black text-[#0070C0] tracking-wide">
             ⏰ 活動時間：19:00 - 21:20
           </div>
+          {/* ✨ 修正錯字：每星期校正 ➡️ 每星期六 */}
           <div className="text-base sm:text-xl text-[#ff6d00] font-bold">
-            🔄 每星期校正晚上 22:00 準時更新開放下週報名
+            🔄 每星期六晚上 22:00 準時更新開放下週報名
           </div>
           <div className="text-sm sm:text-base text-red-500 font-bold pt-1">
             ⚠️ 各場次當天 18:30 後即截止報名，但仍可輸入密碼取消
