@@ -7,30 +7,42 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzh
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── 輔助函式：自動更新日期推算邏輯（每週六晚上 22:00 更新） ───
+// ─── 輔助函式：自動更新日期推算邏輯（嚴格執行每週六晚上 22:00 更新） ───
 function getTargetDateStr(targetDayOfWeek) {
   const now = new Date();
-  const currentDay = now.getDay(); 
+  const currentDay = now.getDay(); // 0 是週日, 1-6 是週一到週六
+  const currentHours = now.getHours();
+  const currentMinutes = now.getMinutes();
+  
+  // 將目前時間換算成分鐘數，方便精準對比 (22:00 = 22 * 60 = 1320 分鐘)
+  const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+  const targetTimeInMinutes = 22 * 60; // 22:00
 
+  // ✨ 嚴格判定是否進入下週模式：
+  // 1. 今天是週六(6)，且時間「已經達到或超過」晚上 22:00
+  // 2. 今天是週日(0)
   let isNextWeekMode = false;
-  if (currentDay === 6) {
+  if (currentDay === 6 && currentTimeInMinutes >= targetTimeInMinutes) {
     isNextWeekMode = true; 
   } else if (currentDay === 0) {
     isNextWeekMode = true; 
   }
 
+  // 找出本週一的基準點
   const baseDate = new Date(now);
   const dayOffset = currentDay === 0 ? -6 : 1 - currentDay;
   baseDate.setDate(now.getDate() + dayOffset); 
 
+  // 如果滿足下週模式（週六22:00後或週日），才將基準點往後推 7 天
   if (isNextWeekMode) {
     baseDate.setDate(baseDate.getDate() + 7);
   }
 
+  // 根據基準日推算各場次日期
   const resultDate = new Date(baseDate);
-  if (targetDayOfWeek === 1) resultDate.setDate(baseDate.getDate() + 0); 
-  if (targetDayOfWeek === 5) resultDate.setDate(baseDate.getDate() + 4); 
-  if (targetDayOfWeek === 6) resultDate.setDate(baseDate.getDate() + 5); 
+  if (targetDayOfWeek === 1) resultDate.setDate(baseDate.getDate() + 0); // 週一
+  if (targetDayOfWeek === 5) resultDate.setDate(baseDate.getDate() + 4); // 週五
+  if (targetDayOfWeek === 6) resultDate.setDate(baseDate.getDate() + 5); // 週六
 
   const mm = String(resultDate.getMonth() + 1).padStart(2, '0');
   const dd = String(resultDate.getDate()).padStart(2, '0');
@@ -174,7 +186,6 @@ export default function Home() {
           <p className="text-lg sm:text-2xl text-[#0070C0] font-black tracking-widest border-t border-[#b6d7a8] pt-3 sm:pt-4 mt-4 sm:mt-6">
             新手免費體驗與新手區報名
           </p>
-          {/* ✨ 優化：分行排版，讓手機版更好閱讀、租借球拍獨立在下方 */}
           <div className="mt-4 px-4 py-2.5 bg-white/70 inline-flex flex-col items-center justify-center rounded-2xl text-sm sm:text-lg text-[#ff6d00] font-black shadow-sm border border-[#ffe082] space-y-1">
             <div>💰 新手體驗免費 ｜ 新手區單次 100 元</div>
             <div className="text-[#0070C0] border-t border-dashed border-[#ffe082] pt-1 w-full text-center">
@@ -228,7 +239,6 @@ export default function Home() {
           <div className="text-2xl sm:text-4xl font-black text-[#0070C0] tracking-wide">
             ⏰ 活動時間：19:00 - 21:20
           </div>
-          {/* ✨ 修正錯字：每星期校正 ➡️ 每星期六 */}
           <div className="text-base sm:text-xl text-[#ff6d00] font-bold">
             🔄 每星期六晚上 22:00 準時更新開放下週報名
           </div>
