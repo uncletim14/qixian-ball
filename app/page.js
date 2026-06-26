@@ -10,17 +10,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ─── 輔助函式：自動更新日期推算邏輯（嚴格執行每週六晚上 22:00 更新） ───
 function getTargetDateStr(targetDayOfWeek) {
   const now = new Date();
-  const currentDay = now.getDay(); // 0 是週日, 1-6 是週一到週六
+  const currentDay = now.getDay(); 
   const currentHours = now.getHours();
   const currentMinutes = now.getMinutes();
   
-  // 將目前時間換算成分鐘數，方便精準對比 (22:00 = 22 * 60 = 1320 分鐘)
   const currentTimeInMinutes = currentHours * 60 + currentMinutes;
   const targetTimeInMinutes = 22 * 60; // 22:00
 
-  // ✨ 嚴格判定是否進入下週模式：
-  // 1. 今天是週六(6)，且時間「已經達到或超過」晚上 22:00
-  // 2. 今天是週日(0)
   let isNextWeekMode = false;
   if (currentDay === 6 && currentTimeInMinutes >= targetTimeInMinutes) {
     isNextWeekMode = true; 
@@ -28,21 +24,18 @@ function getTargetDateStr(targetDayOfWeek) {
     isNextWeekMode = true; 
   }
 
-  // 找出本週一的基準點
   const baseDate = new Date(now);
   const dayOffset = currentDay === 0 ? -6 : 1 - currentDay;
   baseDate.setDate(now.getDate() + dayOffset); 
 
-  // 如果滿足下週模式（週六22:00後或週日），才將基準點往後推 7 天
   if (isNextWeekMode) {
     baseDate.setDate(baseDate.getDate() + 7);
   }
 
-  // 根據基準日推算各場次日期
   const resultDate = new Date(baseDate);
-  if (targetDayOfWeek === 1) resultDate.setDate(baseDate.getDate() + 0); // 週一
-  if (targetDayOfWeek === 5) resultDate.setDate(baseDate.getDate() + 4); // 週五
-  if (targetDayOfWeek === 6) resultDate.setDate(baseDate.getDate() + 5); // 週六
+  if (targetDayOfWeek === 1) resultDate.setDate(baseDate.getDate() + 0); 
+  if (targetDayOfWeek === 5) resultDate.setDate(baseDate.getDate() + 4); 
+  if (targetDayOfWeek === 6) resultDate.setDate(baseDate.getDate() + 5); 
 
   const mm = String(resultDate.getMonth() + 1).padStart(2, '0');
   const dd = String(resultDate.getDate()).padStart(2, '0');
@@ -61,15 +54,17 @@ export default function Home() {
   ];
 
   const [selectedDay, setSelectedDay] = useState('fri'); 
-  const [selectedType, setSelectedType] = useState('normal'); 
+  const [selectedType, setSelectedType] = useState('experience'); // ✨ 預設切換到有開放的「新手體驗」
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  const isAvailable = selectedType === 'normal';
+  // ─── ✨ 開放權限判定邏輯變更 ✨ ───
+  // 現在改成「新手體驗 (experience)」開放報名，「新手區 (normal)」關閉
+  const isAvailable = selectedType === 'experience';
 
   const TYPES = [
-    { id: 'experience', label: '新手體驗', note: '本週無開放' },
-    { id: 'normal', label: '新手區', note: '開放報名' }
+    { id: 'experience', label: '新手體驗', note: '開放報名' }, // ✨ 改為開放
+    { id: 'normal', label: '新手區', note: '本週無開放' }       // ✨ 改為關閉
   ];
 
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
@@ -96,7 +91,8 @@ export default function Home() {
 
   list.forEach(item => {
     const seats = Number(item.count) || 0;
-    if (currentTotal + seats <= 8) {
+    // ✨ 人數限制修正：從 8 人調高到 9 人
+    if (currentTotal + seats <= 9) {
       mainList.push(item);
       currentTotal += seats;
     } else {
@@ -290,7 +286,8 @@ export default function Home() {
                 本週此分區無開放
               </div>
               <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
-                請點選上方切換至 <span className="text-[#0070C0]">新手區</span> 進行報名喔！
+                {/* ✨ 防呆看板提示文字同步更新 */}
+                請點選上方切換至 <span className="text-[#0070C0]">新手體驗區</span> 進行報名喔！
               </div>
             </div>
           )}
@@ -299,10 +296,11 @@ export default function Home() {
         {/* 6. 名單顯示 */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex justify-between items-center px-2">
+            {/* ✨ 畫面顯示正取上限同步修改為 9 */}
             <h2 className="text-2xl sm:text-4xl font-black tracking-wide text-[#0070C0]">
-              正取人數：<span className="text-[#ff6d00]">{currentTotal}</span> / 8
+              正取人數：<span className="text-[#ff6d00]">{currentTotal}</span> / 9
             </h2>
-            {currentTotal >= 8 && <span className="text-base sm:text-xl bg-[#ffebee] text-[#c62828] font-black px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-[#ef9a9a]">正取已滿</span>}
+            {currentTotal >= 9 && <span className="text-base sm:text-xl bg-[#ffebee] text-[#c62828] font-black px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-[#ef9a9a]">正取已滿</span>}
           </div>
           
           {mainList.length === 0 ? (
