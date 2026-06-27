@@ -54,12 +54,10 @@ export default function Home() {
   ];
 
   const [selectedDay, setSelectedDay] = useState('fri'); 
-  const [selectedType, setSelectedType] = useState('normal'); // 預設配合週五，選取「新手區」
+  const [selectedType, setSelectedType] = useState('normal'); 
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  // ─── ✨ 核心：動態調整開放權限與備註文字 ✨ ───
-  // 週一開放體驗關閉新手區；週五六開放新手區關閉體驗
   const isAvailable = selectedDay === 'mon' ? selectedType === 'experience' : selectedType === 'normal';
 
   const TYPES = [
@@ -78,10 +76,8 @@ export default function Home() {
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  // ✨ 動態計算人數上限：週一場為 9 位，週五與週六場維持 8 位
   const maxSeatsLimit = selectedDay === 'mon' ? 9 : 8;
 
-  // ✨ 當使用者切換「日期」時，自動幫他切換到該天有開放的組別，防止畫面一臉卡死
   useEffect(() => {
     if (selectedDay === 'mon') {
       setSelectedType('experience');
@@ -139,15 +135,19 @@ export default function Home() {
     }
 
     const now = new Date();
-    const currentDay = now.getDay();
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
     const currentTimeValue = currentHours * 100 + currentMinutes; 
 
-    const selectedDayConfig = DAYS.find(d => d.id === selectedDay);
-    
-    if (currentDay === selectedDayConfig?.dayNum && currentTimeValue >= 1830) {
-      alert(`🚫 抱歉！今天 ${selectedDayConfig.label} 的報名已於 18:30 截止囉！`);
+    // ✨ 關鍵修正：取得今天真正的 MM/DD 格式字串
+    const todayMM = String(now.getMonth() + 1).padStart(2, '0');
+    const todayDD = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${todayMM}/${todayDD}`;
+
+    // ✨ 修正：只有當球友點選的按鈕日期（activeDate）就是今天（todayStr），且時間超過 18:30 時才阻擋！
+    if (activeDate === todayStr && currentTimeValue >= 1830) {
+      const selectedDayConfig = DAYS.find(d => d.id === selectedDay);
+      alert(`🚫 抱歉！今天 ${selectedDayConfig?.label || ''} 的報名已於 18:30 截止囉！`);
       return;
     }
 
