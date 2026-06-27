@@ -54,22 +54,41 @@ export default function Home() {
   ];
 
   const [selectedDay, setSelectedDay] = useState('fri'); 
-  const [selectedType, setSelectedType] = useState('experience'); 
+  const [selectedType, setSelectedType] = useState('normal'); // 預設配合週五，選取「新手區」
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  const isAvailable = selectedType === 'experience';
+  // ─── ✨ 核心：動態調整開放權限與備註文字 ✨ ───
+  // 週一開放體驗關閉新手區；週五六開放新手區關閉體驗
+  const isAvailable = selectedDay === 'mon' ? selectedType === 'experience' : selectedType === 'normal';
 
   const TYPES = [
-    { id: 'experience', label: '新手體驗', note: '開放報名' }, 
-    { id: 'normal', label: '新手區', note: '本週無開放' }       
+    { 
+      id: 'experience', 
+      label: '新手體驗', 
+      note: selectedDay === 'mon' ? '開放報名' : '本週無開放' 
+    },
+    { 
+      id: 'normal', 
+      label: '新手區', 
+      note: selectedDay === 'mon' ? '本週無開放' : '開放報名' 
+    }
   ];
 
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  // ✨ 動態計算目前選中場次的人數上限：週一場為 9 位，其餘場次（週五、週六）維持 8 位
+  // ✨ 動態計算人數上限：週一場為 9 位，週五與週六場維持 8 位
   const maxSeatsLimit = selectedDay === 'mon' ? 9 : 8;
+
+  // ✨ 當使用者切換「日期」時，自動幫他切換到該天有開放的組別，防止畫面一臉卡死
+  useEffect(() => {
+    if (selectedDay === 'mon') {
+      setSelectedType('experience');
+    } else {
+      setSelectedType('normal');
+    }
+  }, [selectedDay]);
 
   useEffect(() => { 
     const load = async () => {
@@ -92,7 +111,6 @@ export default function Home() {
 
   list.forEach(item => {
     const seats = Number(item.count) || 0;
-    // ✨ 動態套用上限人數 (maxSeatsLimit)
     if (currentTotal + seats <= maxSeatsLimit) {
       mainList.push(item);
       currentTotal += seats;
@@ -287,7 +305,7 @@ export default function Home() {
                 本週此分區無開放
               </div>
               <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
-                請點選上方切換至 <span className="text-[#0070C0]">新手體驗區</span> 進行報名喔！
+                請點選上方切換至 <span className="text-[#0070C0]">{selectedDay === 'mon' ? '新手體驗' : '新手區'}</span> 進行報名喔！
               </div>
             </div>
           )}
@@ -296,7 +314,6 @@ export default function Home() {
         {/* 6. 名單顯示 */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex justify-between items-center px-2">
-            {/* ✨ 畫面顯示正取上限：現在會根據切換天數動態改成 / 9 或 / 8 */}
             <h2 className="text-2xl sm:text-4xl font-black tracking-wide text-[#0070C0]">
               正取人數：<span className="text-[#ff6d00]">{currentTotal}</span> / {maxSeatsLimit}
             </h2>
