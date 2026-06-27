@@ -54,21 +54,22 @@ export default function Home() {
   ];
 
   const [selectedDay, setSelectedDay] = useState('fri'); 
-  const [selectedType, setSelectedType] = useState('experience'); // ✨ 預設切換到有開放的「新手體驗」
+  const [selectedType, setSelectedType] = useState('experience'); 
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  // ─── ✨ 開放權限判定邏輯變更 ✨ ───
-  // 現在改成「新手體驗 (experience)」開放報名，「新手區 (normal)」關閉
   const isAvailable = selectedType === 'experience';
 
   const TYPES = [
-    { id: 'experience', label: '新手體驗', note: '開放報名' }, // ✨ 改為開放
-    { id: 'normal', label: '新手區', note: '本週無開放' }       // ✨ 改為關閉
+    { id: 'experience', label: '新手體驗', note: '開放報名' }, 
+    { id: 'normal', label: '新手區', note: '本週無開放' }       
   ];
 
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
+
+  // ✨ 動態計算目前選中場次的人數上限：週一場為 9 位，其餘場次（週五、週六）維持 8 位
+  const maxSeatsLimit = selectedDay === 'mon' ? 9 : 8;
 
   useEffect(() => { 
     const load = async () => {
@@ -91,8 +92,8 @@ export default function Home() {
 
   list.forEach(item => {
     const seats = Number(item.count) || 0;
-    // ✨ 人數限制修正：從 8 人調高到 9 人
-    if (currentTotal + seats <= 9) {
+    // ✨ 動態套用上限人數 (maxSeatsLimit)
+    if (currentTotal + seats <= maxSeatsLimit) {
       mainList.push(item);
       currentTotal += seats;
     } else {
@@ -286,7 +287,6 @@ export default function Home() {
                 本週此分區無開放
               </div>
               <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
-                {/* ✨ 防呆看板提示文字同步更新 */}
                 請點選上方切換至 <span className="text-[#0070C0]">新手體驗區</span> 進行報名喔！
               </div>
             </div>
@@ -296,11 +296,11 @@ export default function Home() {
         {/* 6. 名單顯示 */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex justify-between items-center px-2">
-            {/* ✨ 畫面顯示正取上限同步修改為 9 */}
+            {/* ✨ 畫面顯示正取上限：現在會根據切換天數動態改成 / 9 或 / 8 */}
             <h2 className="text-2xl sm:text-4xl font-black tracking-wide text-[#0070C0]">
-              正取人數：<span className="text-[#ff6d00]">{currentTotal}</span> / 9
+              正取人數：<span className="text-[#ff6d00]">{currentTotal}</span> / {maxSeatsLimit}
             </h2>
-            {currentTotal >= 9 && <span className="text-base sm:text-xl bg-[#ffebee] text-[#c62828] font-black px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-[#ef9a9a]">正取已滿</span>}
+            {currentTotal >= maxSeatsLimit && <span className="text-base sm:text-xl bg-[#ffebee] text-[#c62828] font-black px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-[#ef9a9a]">正取已滿</span>}
           </div>
           
           {mainList.length === 0 ? (
