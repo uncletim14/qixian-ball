@@ -76,7 +76,8 @@ export default function Home() {
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  const maxSeatsLimit = selectedDay === 'mon' ? 9 : 8;
+  // ✨ 動態計算人數上限：週一 9 位、週六調高為 16 位、其餘（週五）維持 8 位
+  const maxSeatsLimit = selectedDay === 'mon' ? 9 : (selectedDay === 'sat' ? 16 : 8);
 
   useEffect(() => {
     if (selectedDay === 'mon') {
@@ -139,12 +140,10 @@ export default function Home() {
     const currentMinutes = now.getMinutes();
     const currentTimeValue = currentHours * 100 + currentMinutes; 
 
-    // ✨ 關鍵修正：取得今天真正的 MM/DD 格式字串
     const todayMM = String(now.getMonth() + 1).padStart(2, '0');
     const todayDD = String(now.getDate()).padStart(2, '0');
     const todayStr = `${todayMM}/${todayDD}`;
 
-    // ✨ 修正：只有當球友點選的按鈕日期（activeDate）就是今天（todayStr），且時間超過 18:30 時才阻擋！
     if (activeDate === todayStr && currentTimeValue >= 1830) {
       const selectedDayConfig = DAYS.find(d => d.id === selectedDay);
       alert(`🚫 抱歉！今天 ${selectedDayConfig?.label || ''} 的報名已於 18:30 截止囉！`);
