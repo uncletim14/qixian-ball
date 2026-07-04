@@ -54,37 +54,28 @@ export default function Home() {
   ];
 
   const [selectedDay, setSelectedDay] = useState('fri'); 
-  const [selectedType, setSelectedType] = useState('normal'); 
+  const [selectedType, setSelectedType] = useState('normal'); // ✨ 預設切換到有開放的「新手區」
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  const isAvailable = selectedDay === 'mon' ? selectedType === 'experience' : selectedType === 'normal';
+  // ─── ✨ 開放權限判定邏輯變更 ✨ ───
+  // 現在改成全場次（週一、週五、週六）都「只有開放新手區 (normal)」，新手體驗 (experience) 一律關閉
+  const isAvailable = selectedType === 'normal';
 
   const TYPES = [
-    { 
-      id: 'experience', 
-      label: '新手體驗', 
-      note: selectedDay === 'mon' ? '開放報名' : '本週無開放' 
-    },
-    { 
-      id: 'normal', 
-      label: '新手區', 
-      note: selectedDay === 'mon' ? '本週無開放' : '開放報名' 
-    }
+    { id: 'experience', label: '新手體驗', note: '本週無開放' }, // ✨ 一律關閉
+    { id: 'normal', label: '新手區', note: '開放報名' }       // ✨ 一律開放
   ];
 
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  // ✨ 動態計算人數上限：週一 9 位、週六調高為 16 位、其餘（週五）維持 8 位
-  const maxSeatsLimit = selectedDay === 'mon' ? 9 : (selectedDay === 'sat' ? 16 : 8);
+  // ✨ 動態計算人數上限變更：週六調高為 16 位，週一與週五皆維持 8 位
+  const maxSeatsLimit = selectedDay === 'sat' ? 16 : 8;
 
+  // ✨ 日期連動優化調整：切換日期時一律保持在有開放的「新手區」
   useEffect(() => {
-    if (selectedDay === 'mon') {
-      setSelectedType('experience');
-    } else {
-      setSelectedType('normal');
-    }
+    setSelectedType('normal');
   }, [selectedDay]);
 
   useEffect(() => { 
@@ -304,7 +295,8 @@ export default function Home() {
                 本週此分區無開放
               </div>
               <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
-                請點選上方切換至 <span className="text-[#0070C0]">{selectedDay === 'mon' ? '新手體驗' : '新手區'}</span> 進行報名喔！
+                {/* ✨ 防呆看板提示文字更新 */}
+                請點選上方切換至 <span className="text-[#0070C0]">新手區</span> 進行報名喔！
               </div>
             </div>
           )}
