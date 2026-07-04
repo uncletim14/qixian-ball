@@ -54,26 +54,23 @@ export default function Home() {
   ];
 
   const [selectedDay, setSelectedDay] = useState('fri'); 
-  const [selectedType, setSelectedType] = useState('normal'); // ✨ 預設切換到有開放的「新手區」
+  const [selectedType, setSelectedType] = useState('normal'); 
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  // ─── ✨ 開放權限判定邏輯變更 ✨ ───
-  // 現在改成全場次（週一、週五、週六）都「只有開放新手區 (normal)」，新手體驗 (experience) 一律關閉
   const isAvailable = selectedType === 'normal';
 
   const TYPES = [
-    { id: 'experience', label: '新手體驗', note: '本週無開放' }, // ✨ 一律關閉
-    { id: 'normal', label: '新手區', note: '開放報名' }       // ✨ 一律開放
+    { id: 'experience', label: '新手體驗', note: '本週無開放' }, 
+    { id: 'normal', label: '新手區', note: '開放報名' }       
   ];
 
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  // ✨ 動態計算人數上限變更：週六調高為 16 位，週一與週五皆維持 8 位
-  const maxSeatsLimit = selectedDay === 'sat' ? 16 : 8;
+  // ✨ 修正：不論週一、週五、週六，人數上限一律恢復為 8 位
+  const maxSeatsLimit = 8;
 
-  // ✨ 日期連動優化調整：切換日期時一律保持在有開放的「新手區」
   useEffect(() => {
     setSelectedType('normal');
   }, [selectedDay]);
@@ -295,7 +292,6 @@ export default function Home() {
                 本週此分區無開放
               </div>
               <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
-                {/* ✨ 防呆看板提示文字更新 */}
                 請點選上方切換至 <span className="text-[#0070C0]">新手區</span> 進行報名喔！
               </div>
             </div>
@@ -304,6 +300,7 @@ export default function Home() {
 
         {/* 6. 名單顯示 */}
         <div className="space-y-4 sm:space-y-6">
+          {/* 畫面人數指示會自動對齊 / 8 */}
           <div className="flex justify-between items-center px-2">
             <h2 className="text-2xl sm:text-4xl font-black tracking-wide text-[#0070C0]">
               正取人數：<span className="text-[#ff6d00]">{currentTotal}</span> / {maxSeatsLimit}
