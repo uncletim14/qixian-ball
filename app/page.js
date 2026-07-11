@@ -58,14 +58,11 @@ export default function Home() {
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  // ─── ✨ 核心：智慧開放權限判定邏輯 ✨ ───
-  // 週一：只開體驗 / 週五：只開新手區 / 週六：兩個都開放
-  let isAvailable = false;
+  const isAvailable = false;
   if (selectedDay === 'mon' && selectedType === 'experience') isAvailable = true;
   if (selectedDay === 'fri' && selectedType === 'normal') isAvailable = true;
-  if (selectedDay === 'sat') isAvailable = true; // 週六兩個組別都開放
+  if (selectedDay === 'sat') isAvailable = true; 
 
-  // ─── ✨ 智慧組別備註文字 ───
   const TYPES = [
     { 
       id: 'experience', 
@@ -82,18 +79,22 @@ export default function Home() {
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  // ─── ✨ 智慧人數上限設定 ✨ ───
-  // 只要是新手體驗就是 9 位；如果是新手區（週五、週六）就是 8 位
   const maxSeatsLimit = selectedType === 'experience' ? 9 : 8;
 
-  // ✨ 當球友切換「日期」時，自動幫他選取該天有開放的預設組別，防止畫面顯示無開放
+  // ✨ 當組別切換時，如果原本選的人數（例如 4位）超出了新分區的上限（例如新手區最多 2位），自動幫忙降回 1位 防止出錯
+  useEffect(() => {
+    const numericCount = parseInt(form.count);
+    if (selectedType === 'normal' && numericCount > 2) {
+      setForm(prev => ({ ...prev, count: '1' }));
+    }
+  }, [selectedType]);
+
   useEffect(() => {
     if (selectedDay === 'mon') {
       setSelectedType('experience');
     } else if (selectedDay === 'fri') {
       setSelectedType('normal');
     }
-    // 週六因為都開放，維持原本選取的即可，不強迫切換
   }, [selectedDay]);
 
   useEffect(() => { 
@@ -159,6 +160,17 @@ export default function Home() {
       return;
     }
 
+    // ✨ 安全核心防呆：後端阻擋單筆人數溢出
+    const numericCount = parseInt(form.count);
+    if (selectedType === 'experience' && (numericCount < 1 || numericCount > 4)) {
+      alert('🚫 新手體驗單筆報名最多 4 位球友喔！');
+      return;
+    }
+    if (selectedType === 'normal' && (numericCount < 1 || numericCount > 2)) {
+      alert('🚫 新手區單筆報名最多 2 位球友喔！');
+      return;
+    }
+
     const trimmedName = form.name.trim();
     if (!trimmedName || form.password.length !== 4) { 
       alert('請輸入暱稱與 4 位密碼'); 
@@ -172,7 +184,7 @@ export default function Home() {
 
     const { error } = await supabase.from('pickleball_registrations').insert([{
       name: trimmedName, 
-      count: parseInt(form.count), 
+      count: numericCount, 
       password: form.password, 
       session_id: currentSessionId, 
       created_at: new Date().toISOString()
@@ -286,6 +298,8 @@ export default function Home() {
                 value={form.name} 
                 onChange={e => setForm({...form, name: e.target.value})} 
               />
+              
+              {/* ✨ 智慧連動選單：根據組別動態改變可選的人數選項 */}
               <select 
                 className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
                 value={form.count} 
@@ -293,7 +307,15 @@ export default function Home() {
               >
                 <option value="1">1 位</option>
                 <option value="2">2 位</option>
+                {/* 只有在選取「新手體驗」時，才會展示出 3位 與 4位 */}
+                {selectedType === 'experience' && (
+                  <>
+                    <option value="3">3 位</option>
+                    <option value="4">4 位</option>
+                  </>
+                )}
               </select>
+
               <input 
                 className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
                 type="password" 
