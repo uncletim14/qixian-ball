@@ -58,21 +58,42 @@ export default function Home() {
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
-  const isAvailable = selectedType === 'normal';
+  // ─── ✨ 核心：智慧開放權限判定邏輯 ✨ ───
+  // 週一：只開體驗 / 週五：只開新手區 / 週六：兩個都開放
+  let isAvailable = false;
+  if (selectedDay === 'mon' && selectedType === 'experience') isAvailable = true;
+  if (selectedDay === 'fri' && selectedType === 'normal') isAvailable = true;
+  if (selectedDay === 'sat') isAvailable = true; // 週六兩個組別都開放
 
+  // ─── ✨ 智慧組別備註文字 ───
   const TYPES = [
-    { id: 'experience', label: '新手體驗', note: '本週無開放' }, 
-    { id: 'normal', label: '新手區', note: '開放報名' }       
+    { 
+      id: 'experience', 
+      label: '新手體驗', 
+      note: (selectedDay === 'mon' || selectedDay === 'sat') ? '開放報名' : '本週無開放' 
+    },
+    { 
+      id: 'normal', 
+      label: '新手區', 
+      note: (selectedDay === 'fri' || selectedDay === 'sat') ? '開放報名' : '本週無開放' 
+    }
   ];
 
   const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  // ✨ 修正：不論週一、週五、週六，人數上限一律恢復為 8 位
-  const maxSeatsLimit = 8;
+  // ─── ✨ 智慧人數上限設定 ✨ ───
+  // 只要是新手體驗就是 9 位；如果是新手區（週五、週六）就是 8 位
+  const maxSeatsLimit = selectedType === 'experience' ? 9 : 8;
 
+  // ✨ 當球友切換「日期」時，自動幫他選取該天有開放的預設組別，防止畫面顯示無開放
   useEffect(() => {
-    setSelectedType('normal');
+    if (selectedDay === 'mon') {
+      setSelectedType('experience');
+    } else if (selectedDay === 'fri') {
+      setSelectedType('normal');
+    }
+    // 週六因為都開放，維持原本選取的即可，不強迫切換
   }, [selectedDay]);
 
   useEffect(() => { 
@@ -292,7 +313,7 @@ export default function Home() {
                 本週此分區無開放
               </div>
               <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
-                請點選上方切換至 <span className="text-[#0070C0]">新手區</span> 進行報名喔！
+                請點選上方切換至 <span className="text-[#0070C0]">{selectedDay === 'mon' ? '新手體驗' : '新手區'}</span> 進行報名喔！
               </div>
             </div>
           )}
@@ -300,7 +321,6 @@ export default function Home() {
 
         {/* 6. 名單顯示 */}
         <div className="space-y-4 sm:space-y-6">
-          {/* 畫面人數指示會自動對齊 / 8 */}
           <div className="flex justify-between items-center px-2">
             <h2 className="text-2xl sm:text-4xl font-black tracking-wide text-[#0070C0]">
               正取人數：<span className="text-[#ff6d00]">{currentTotal}</span> / {maxSeatsLimit}
