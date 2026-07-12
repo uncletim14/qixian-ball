@@ -7,7 +7,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzh
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── 輔助函式：自動更新日期推算邏輯（嚴格執行每週六晚上 22:00 更新） ───
+// ─── 輔助函式：自動更新日期推算邏輯 ───
 function getTargetDateStr(targetDayOfWeek) {
   const now = new Date();
   const currentDay = now.getDay(); 
@@ -56,7 +56,24 @@ export default function Home() {
   const [selectedDay, setSelectedDay] = useState('fri'); 
   const [selectedType, setSelectedType] = useState('normal'); 
   const [list, setList] = useState([]);
+  
+  // 報名表單 State
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
+  
+  // ✨ 新增：報到表單 State
+  const [checkInName, setCheckInName] = useState('');
+  const [checkInPwd, setCheckInPwd] = useState('');
+  const [isCheckInMode, setIsCheckInMode] = useState(false);
+
+  // ✨ 自動偵測網址是否帶有 ?mode=checkin，如果是，自動切換到現場報到模式
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'checkin') {
+        setIsCheckInMode(true);
+      }
+    }
+  }, []);
 
   const isAvailable = false;
   if (selectedDay === 'mon' && selectedType === 'experience') isAvailable = true;
@@ -81,7 +98,6 @@ export default function Home() {
 
   const maxSeatsLimit = selectedType === 'experience' ? 9 : 8;
 
-  // ✨ 當組別切換時，如果原本選的人數（例如 4位）超出了新分區的上限（例如新手區最多 2位），自動幫忙降回 1位 防止出錯
   useEffect(() => {
     const numericCount = parseInt(form.count);
     if (selectedType === 'normal' && numericCount > 2) {
@@ -101,7 +117,7 @@ export default function Home() {
     const load = async () => {
       const { data, error } = await supabase
         .from('pickleball_registrations')
-        .select('id, name, count, session_id')
+        .select('id, name, count, session_id, arrived') // ✨ 讀取 arrived 狀態
         .eq('session_id', currentSessionId)
         .order('created_at', { ascending: true });
         
@@ -131,7 +147,7 @@ export default function Home() {
   const refreshData = async () => {
     const { data, error } = await supabase
       .from('pickleball_registrations')
-      .select('id, name, count, session_id')
+      .select('id, name, count, session_id, arrived')
       .eq('session_id', currentSessionId)
       .order('created_at', { ascending: true });
       
@@ -160,7 +176,6 @@ export default function Home() {
       return;
     }
 
-    // ✨ 安全核心防呆：後端阻擋單筆人數溢出
     const numericCount = parseInt(form.count);
     if (selectedType === 'experience' && (numericCount < 1 || numericCount > 4)) {
       alert('🚫 新手體驗單筆報名最多 4 位球友喔！');
@@ -187,7 +202,8 @@ export default function Home() {
       count: numericCount, 
       password: form.password, 
       session_id: currentSessionId, 
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      arrived: false // 預設未報到
     }]);
 
     if (error) alert('報名失敗：' + error.message);
@@ -195,6 +211,44 @@ export default function Home() {
       alert('登記成功！'); 
       setForm({ name: '', count: '1', password: '' }); 
       refreshData(); 
+    }
+  };
+
+  // ✨ 新增：球友現場自主報到函式
+  const handleCheckInSubmit = async () => {
+    if (!checkInName) {
+      alert('請選擇您的暱稱！');
+      return;
+    }
+    if (checkInPwd.length !== 4) {
+      alert('請輸入報名時設定的 4 位密碼！');
+      return;
+    }
+
+    // 先驗證密碼是否正確
+    const targetItem = list.find(item => item.name === checkInName);
+    if (!targetItem) {
+      alert('找不到該報名資料！');
+      return;
+    }
+
+    // 直接在資料庫更新 arrived 欄位，同時比對密碼安全防護
+    const { data, error } = await supabase
+      .from('pickleball_registrations')
+      .update({ arrived: true })
+      .eq('id', targetItem.id)
+      .eq('password', checkInPwd)
+      .select();
+
+    if (error) {
+      alert('系統錯誤：' + error.message);
+    } else if (data && data.length === 0) {
+      alert('❌ 密碼輸入錯誤，請重新確認喔！');
+    } else {
+      alert(`🎉 報到成功！歡迎球友【${checkInName}】到場！`);
+      setCheckInName('');
+      setCheckInPwd('');
+      refreshData();
     }
   };
 
@@ -210,6 +264,18 @@ export default function Home() {
     <main className="min-h-screen bg-[#f0f4f8] text-[#2d3748] p-4 sm:p-8">
       <div className="max-w-2xl mx-auto space-y-6 sm:space-y-10 py-2 sm:py-6">
         
+        {/* ✨ 頂部模式切換器（貼心提供手動切換按鈕，方便主辦人調試） */}
+        <div className="flex justify-end px-2">
+          <button 
+            onClick={() => setIsCheckInMode(!isCheckInMode)} 
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all ${
+              isCheckInMode ? 'bg-[#ff6d00] text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+            }`}
+          >
+            {isCheckInMode ? '🔄 切換回：網路報名模式' : '📌 切換至：現場報到模式'}
+          </button>
+        </div>
+
         {/* 1. 頂部大標題區塊 */}
         <div className="text-center bg-[#D9EAD3] p-6 sm:p-12 rounded-3xl shadow-md border border-[#b6d7a8]">
           <h1 className="text-3xl sm:text-6xl font-black text-[#0070C0] tracking-wider leading-tight">
@@ -219,14 +285,8 @@ export default function Home() {
             交流團
           </h1>
           <p className="text-lg sm:text-2xl text-[#0070C0] font-black tracking-widest border-t border-[#b6d7a8] pt-3 sm:pt-4 mt-4 sm:mt-6">
-            新手免費體驗與新手區報名
+            {isCheckInMode ? '📱 歡迎來到球場！請自主完成到場報到' : '新手免費體驗與新手區報名'}
           </p>
-          <div className="mt-4 px-4 py-2.5 bg-white/70 inline-flex flex-col items-center justify-center rounded-2xl text-sm sm:text-lg text-[#ff6d00] font-black shadow-sm border border-[#ffe082] space-y-1">
-            <div>💰 新手體驗免費 ｜ 新手區單次 100 元</div>
-            <div className="text-[#0070C0] border-t border-dashed border-[#ffe082] pt-1 w-full text-center">
-              🏓 租借球拍一隻 50 元
-            </div>
-          </div>
         </div>
 
         {/* 2. 第一層：日期按鈕 */}
@@ -274,70 +334,105 @@ export default function Home() {
           <div className="text-2xl sm:text-4xl font-black text-[#0070C0] tracking-wide">
             ⏰ 活動時間：19:00 - 21:20
           </div>
-          <div className="text-base sm:text-xl text-[#ff6d00] font-bold">
-            🔄 每星期六晚上 22:00 準時更新開放下週報名
-          </div>
-          <div className="text-sm sm:text-base text-red-500 font-bold pt-1">
-            ⚠️ 各場次當天 18:30 後即截止報名，但仍可輸入密碼取消
-          </div>
+          {isCheckInMode ? (
+            <div className="text-base sm:text-xl text-[#ff6d00] font-bold">
+              📢 點選您的暱稱並輸入 4 位密碼即可完成現場報到登錄！
+            </div>
+          ) : (
+            <div className="text-base sm:text-xl text-[#ff6d00] font-bold">
+              🔄 每星期六晚上 22:00 準時更新開放下週報名
+            </div>
+          )}
         </div>
 
-        {/* 5. 報名表單 */}
+        {/* 5. 報名表單 / 報到表單（動態切換顯示） */}
         <div className="bg-[#D9EAD3] p-5 sm:p-8 rounded-3xl shadow-xl border border-[#b6d7a8]">
-          {isAvailable ? (
+          {isCheckInMode ? (
+            /* ─── ✨ 現場報到表單介面 ─── */
             <div className="space-y-4 sm:space-y-6">
-              <div className="text-xl sm:text-2xl text-center">
-                <span className="text-[#0070C0] font-black underline underline-offset-8 decoration-2">
-                  {DAYS.find(d => d.id === selectedDay)?.label} ({activeDate}) - {TYPES.find(t => t.id === selectedType)?.label} 
-                </span>
+              <div className="text-xl sm:text-2xl text-center font-black text-[#ff6d00]">
+                📍 現場報到專區 ({DAYS.find(d => d.id === selectedDay)?.label} - {TYPES.find(t => t.id === selectedType)?.label})
               </div>
-
-              <input 
-                className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
-                placeholder="輸入暱稱" 
-                value={form.name} 
-                onChange={e => setForm({...form, name: e.target.value})} 
-              />
               
-              {/* ✨ 智慧連動選單：根據組別動態改變可選的人數選項 */}
               <select 
-                className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
-                value={form.count} 
-                onChange={e => setForm({...form, count: e.target.value})}
+                className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]"
+                value={checkInName}
+                onChange={e => setCheckInName(e.target.value)}
               >
-                <option value="1">1 位</option>
-                <option value="2">2 位</option>
-                {/* 只有在選取「新手體驗」時，才會展示出 3位 與 4位 */}
-                {selectedType === 'experience' && (
-                  <>
-                    <option value="3">3 位</option>
-                    <option value="4">4 位</option>
-                  </>
-                )}
+                <option value="">-- 請選擇您的暱稱 --</option>
+                {list.map(item => (
+                  <option key={item.id} value={item.name} disabled={item.arrived}>
+                    {item.name} ({item.count}位) {item.arrived ? ' [已完成報到]' : ''}
+                  </option>
+                ))}
               </select>
 
               <input 
                 className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
                 type="password" 
-                placeholder="取消密碼 (4位數字)" 
+                placeholder="輸入您的 4 位報名密碼" 
                 maxLength={4} 
-                value={form.password} 
-                onChange={e => setForm({...form, password: e.target.value})} 
+                value={checkInPwd} 
+                onChange={e => setCheckInPwd(e.target.value)} 
               />
-              <button className="w-full bg-[#0070C0] text-white p-4 sm:p-6 rounded-2xl text-xl sm:text-3xl font-black hover:bg-[#005a9c] transition-all mt-2 shadow-lg active:scale-95" onClick={submit}>
-                確認報名 (滿額自動改備取)
+
+              <button className="w-full bg-[#ff6d00] text-white p-4 sm:p-6 rounded-2xl text-xl sm:text-3xl font-black hover:bg-[#e65c00] transition-all mt-2 shadow-lg active:scale-95" onClick={handleCheckInSubmit}>
+                確認到場報到
               </button>
             </div>
           ) : (
-            <div className="text-center py-6 space-y-3">
-              <div className="text-5xl">🚫</div>
-              <div className="text-2xl sm:text-3xl font-black text-red-600">
-                本週此分區無開放
+            /* ─── 網路報名表單介面 ─── */
+            isAvailable ? (
+              <div className="space-y-4 sm:space-y-6">
+                <div className="text-xl sm:text-2xl text-center">
+                  <span className="text-[#0070C0] font-black underline underline-offset-8 decoration-2">
+                    {DAYS.find(d => d.id === selectedDay)?.label} ({activeDate}) - {TYPES.find(t => t.id === selectedType)?.label} 
+                  </span>
+                </div>
+
+                <input 
+                  className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
+                  placeholder="輸入暱稱" 
+                  value={form.name} 
+                  onChange={e => setForm({...form, name: e.target.value})} 
+                />
+                
+                <select 
+                  className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
+                  value={form.count} 
+                  onChange={e => setForm({...form, count: e.target.value})}
+                >
+                  <option value="1">1 位</option>
+                  <option value="2">2 位</option>
+                  {selectedType === 'experience' && (
+                    <>
+                      <option value="3">3 位</option>
+                      <option value="4">4 位</option>
+                    </>
+                  )}
+                </select>
+
+                <input 
+                  className="w-full p-4 sm:p-6 bg-white rounded-2xl border-2 border-transparent focus:border-[#0070C0] focus:outline-none text-xl sm:text-3xl text-[#1a1a1a]" 
+                  type="password" 
+                  placeholder="取消密碼 (4位數字)" 
+                  maxLength={4} 
+                  value={form.password} 
+                  onChange={e => setForm({...form, password: e.target.value})} 
+                />
+                <button className="w-full bg-[#0070C0] text-white p-4 sm:p-6 rounded-2xl text-xl sm:text-3xl font-black hover:bg-[#005a9c] transition-all mt-2 shadow-lg active:scale-95" onClick={submit}>
+                  確認報名 (滿額自動改備取)
+                </button>
               </div>
-              <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
-                請點選上方切換至 <span className="text-[#0070C0]">{selectedDay === 'mon' ? '新手體驗' : '新手區'}</span> 進行報名喔！
+            ) : (
+              <div className="text-center py-6 space-y-3">
+                <div className="text-5xl">🚫</div>
+                <div className="text-2xl sm:text-3xl font-black text-red-600">本週此分區無開放</div>
+                <div className="text-lg sm:text-xl text-[#4a5443] font-bold">
+                  請點選上方切換至 <span className="text-[#0070C0]">{selectedDay === 'mon' ? '新手體驗' : '新手區'}</span> 進行報名喔！
+                </div>
               </div>
-            </div>
+            )
           )}
         </div>
 
@@ -355,8 +450,17 @@ export default function Home() {
           ) : (
             <div className="space-y-3 sm:space-y-4">
               {mainList.map((item) => (
-                <div key={item.id} className="bg-white p-4 sm:p-6 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
-                  <span className="text-xl sm:text-3xl font-bold tracking-wide text-[#2d3748]">{item.name} <span className="text-[#0070C0] text-lg sm:text-2xl ml-2 sm:ml-3">({item.count}位)</span></span>
+                /* ✨ 智慧顯示：已到場球友會變成柔和的綠色背景，並附帶 [已到場] 標籤 */
+                <div key={item.id} className={`p-4 sm:p-6 rounded-2xl flex justify-between items-center shadow-sm border transition-all ${
+                  item.arrived 
+                    ? 'bg-green-100 border-green-300 ring-2 ring-green-400/30' 
+                    : 'bg-white border-slate-100'
+                }`}>
+                  <span className="text-xl sm:text-3xl font-bold tracking-wide text-[#2d3748]">
+                    {item.arrived && <span className="text-green-600 mr-2 text-lg sm:text-2xl font-black">✓ [已報到]</span>}
+                    {item.name} 
+                    <span className={`${item.arrived ? 'text-green-700' : 'text-[#0070C0]'} text-lg sm:text-2xl ml-2 sm:ml-3`}>({item.count}位)</span>
+                  </span>
                   <button className="text-[#c62828] hover:text-[#b71c1c] text-base sm:text-xl font-black bg-red-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-colors" onClick={() => handleDelete(item)}>取消</button>
                 </div>
               ))}
