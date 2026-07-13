@@ -66,7 +66,14 @@ export default function CheckInPage() {
     { id: 'normal', label: '新手區' }
   ];
 
-  const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
+  // ✨ 修正點 1：日期防呆
+  const activeDayConfig = DAYS.find(d => d.id === selectedDay);
+  const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
+  
+  // ✨ 修正點 2：組別防呆，避免在 find 時發生 undefined.label 崩潰
+  const activeTypeConfig = TYPES.find(t => t.id === selectedType);
+  const activeTypeLabel = activeTypeConfig ? activeTypeConfig.label : '';
+
   const currentSessionId = `${activeDate}_${selectedType}`;
   const maxSeatsLimit = selectedType === 'experience' ? 9 : 8;
 
@@ -81,6 +88,7 @@ export default function CheckInPage() {
 
   // 讀取報名名單
   useEffect(() => { 
+    if (!currentSessionId) return;
     const load = async () => {
       const { data, error } = await supabase
         .from('pickleball_registrations')
@@ -107,6 +115,7 @@ export default function CheckInPage() {
   });
 
   const refreshData = async () => {
+    if (!currentSessionId) return;
     const { data, error } = await supabase
       .from('pickleball_registrations')
       .select('id, name, count, session_id, arrived')
@@ -212,8 +221,9 @@ export default function CheckInPage() {
         {/* 5. 橘色報到表單 */}
         <div className="bg-[#ffe8cc] p-5 sm:p-8 rounded-3xl shadow-xl border border-[#ffd8a8]">
           <div className="space-y-4 sm:space-y-6">
+            {/* ✨ 這裡使用了剛剛定義好的安全變數 activeDayConfig 與 activeTypeLabel */}
             <div className="text-xl sm:text-2xl text-center font-black text-[#d94800]">
-              📍 現場報到專區 ({DAYS.find(d => d.id === selectedDay)?.label} - {TYPES.find(t => t.id === selectedType)?.label})
+              📍 現場報到專區 ({activeDayConfig?.label || ''} - {activeTypeLabel})
             </div>
             
             <select 
