@@ -53,38 +53,50 @@ export default function CheckInPage() {
     { id: 'sat', label: '週六場', dateStr: satDate }
   ];
 
-  const [selectedDay, setSelectedDay] = useState('fri'); 
-  const [selectedType, setSelectedType] = useState('normal'); 
+  const [selectedDay, setSelectedDay] = useState('mon'); 
+  const [selectedType, setSelectedType] = useState('experience'); 
   const [list, setList] = useState([]);
   
   // 報到表單 State
   const [checkInName, setCheckInName] = useState('');
   const [checkInPwd, setCheckInPwd] = useState('');
 
-  const TYPES = [
-    { id: 'experience', label: '新手體驗' },
-    { id: 'normal', label: '新手區' }
-  ];
+  // 根據選擇的日期，動態決定要顯示哪些組別按鈕
+  const getAvailableTypes = () => {
+    if (selectedDay === 'mon') return [{ id: 'experience', label: '新手體驗' }];
+    if (selectedDay === 'fri') return [{ id: 'normal', label: '新手區' }];
+    return [
+      { id: 'experience', label: '新手體驗' },
+      { id: 'normal', label: '新手區' }
+    ];
+  };
 
-  // ✨ 修正點 1：日期防呆
-  const activeDayConfig = DAYS.find(d => d.id === selectedDay);
-  const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
-  
-  // ✨ 修正點 2：組別防呆，避免在 find 時發生 undefined.label 崩潰
-  const activeTypeConfig = TYPES.find(t => t.id === selectedType);
-  const activeTypeLabel = activeTypeConfig ? activeTypeConfig.label : '';
+  const visibleTypes = getAvailableTypes();
 
-  const currentSessionId = `${activeDate}_${selectedType}`;
-  const maxSeatsLimit = selectedType === 'experience' ? 9 : 8;
-
-  // 當切換日期時，自動導向該天有開放的組別
+  // 當切換日期時，自動選擇正確的預設組別
   useEffect(() => {
     if (selectedDay === 'mon') {
       setSelectedType('experience');
     } else if (selectedDay === 'fri') {
       setSelectedType('normal');
+    } else if (selectedDay === 'sat') {
+      if (selectedType !== 'experience' && selectedType !== 'normal') {
+        setSelectedType('experience');
+      }
     }
+    setCheckInName('');
+    setCheckInPwd('');
   }, [selectedDay]);
+
+  const activeDayConfig = DAYS.find(d => d.id === selectedDay);
+  const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
+  
+  const activeTypeConfig = visibleTypes.find(t => t.id === selectedType) || visibleTypes[0];
+  const activeTypeLabel = activeTypeConfig ? activeTypeConfig.label : '';
+  const currentType = activeTypeConfig ? activeTypeConfig.id : selectedType;
+
+  const currentSessionId = `${activeDate}_${currentType}`;
+  const maxSeatsLimit = currentType === 'experience' ? 9 : 8;
 
   // 讀取報名名單
   useEffect(() => { 
@@ -103,7 +115,7 @@ export default function CheckInPage() {
     load(); 
   }, [currentSessionId]);
 
-  // 計算正取名額（用來同步展示狀態）
+  // 計算正取名額
   let currentTotal = 0;
   const mainList = [];
   list.forEach(item => {
@@ -179,7 +191,7 @@ export default function CheckInPage() {
           {DAYS.map(d => (
             <button 
               key={d.id} 
-              onClick={() => { setSelectedDay(d.id); setCheckInName(''); }} 
+              onClick={() => setSelectedDay(d.id)} 
               className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 flex flex-col items-center justify-center gap-1 sm:gap-2 shadow-sm ${
                 selectedDay === d.id 
                   ? 'bg-[#ff6d00] text-white shadow-xl scale-105 border-[#ff6d00]' 
@@ -195,13 +207,13 @@ export default function CheckInPage() {
         </div>
 
         {/* 3. 組別選擇 */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-6">
-          {TYPES.map(t => (
+        <div className={`grid gap-3 sm:gap-6 ${visibleTypes.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {visibleTypes.map(t => (
             <button 
               key={t.id} 
-              onClick={() => { setSelectedType(t.id); setCheckInName(''); }} 
+              onClick={() => setSelectedType(t.id)} 
               className={`p-4 sm:p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${
-                selectedType === t.id 
+                currentType === t.id 
                   ? 'bg-[#ffe8cc] text-[#d94800] border-[#ff6d00] scale-102' 
                   : 'bg-white text-[#718096] border-transparent hover:text-[#ff6d00]'
               }`}
@@ -221,7 +233,6 @@ export default function CheckInPage() {
         {/* 5. 橘色報到表單 */}
         <div className="bg-[#ffe8cc] p-5 sm:p-8 rounded-3xl shadow-xl border border-[#ffd8a8]">
           <div className="space-y-4 sm:space-y-6">
-            {/* ✨ 這裡使用了剛剛定義好的安全變數 activeDayConfig 與 activeTypeLabel */}
             <div className="text-xl sm:text-2xl text-center font-black text-[#d94800]">
               📍 現場報到專區 ({activeDayConfig?.label || ''} - {activeTypeLabel})
             </div>
@@ -254,7 +265,7 @@ export default function CheckInPage() {
           </div>
         </div>
 
-        {/* 6. 名單顯示（僅顯示正取） */}
+        {/* 6. 名單顯示 */}
         <div className="space-y-4 sm:space-y-6">
           <h2 className="text-2xl sm:text-4xl font-black tracking-wide text-[#ff6d00] px-2">
             今日預計出席名單
