@@ -2,9 +2,9 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// 連接 Supabase
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zasiaeehzhsaqjxxiklu.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
+// ✨ 將網址與金鑰硬編碼，100% 繞過 Vercel 環境變數遺失的報錯問題
+const SUPABASE_URL = 'https://zasiaeehzhsaqjxxiklu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ─── 輔助函式：自動更新日期推算邏輯 ───
@@ -48,9 +48,9 @@ export default function Home() {
   const satDate = getTargetDateStr(6);
 
   const DAYS = [
-    { id: 'mon', label: '週一場', dateStr: monDate, dayNum: 1 },
-    { id: 'fri', label: '週五場', dateStr: friDate, dayNum: 5 },
-    { id: 'sat', label: '週六場', dateStr: satDate, dayNum: 6 }
+    { id: 'mon', label: '週一場', dateStr: monDate },
+    { id: 'fri', label: '週五場', dateStr: friDate },
+    { id: 'sat', label: '週六場', dateStr: satDate }
   ];
 
   const [selectedDay, setSelectedDay] = useState('fri'); 
@@ -65,7 +65,7 @@ export default function Home() {
   const [checkInName, setCheckInName] = useState('');
   const [checkInPwd, setCheckInPwd] = useState('');
 
-  // ✨ 關鍵修正：將 const 改為 let，允許後續根據條件重新指派值！
+  // 權限：週一開體驗、週五開新手、週六兩者皆開
   let isAvailable = false;
   if (selectedDay === 'mon' && selectedType === 'experience') isAvailable = true;
   if (selectedDay === 'fri' && selectedType === 'normal') isAvailable = true;
@@ -84,7 +84,8 @@ export default function Home() {
     }
   ];
 
-  const activeDate = DAYS.find(d => d.id === selectedDay)?.dateStr || '';
+  const activeDayConfig = DAYS.find(d => d.id === selectedDay);
+  const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
   const currentSessionId = `${activeDate}_${selectedType}`;
   const maxSeatsLimit = selectedType === 'experience' ? 9 : 8;
 
@@ -105,7 +106,9 @@ export default function Home() {
     }
   }, [selectedDay]);
 
+  // 讀取資料
   useEffect(() => { 
+    if (!currentSessionId) return;
     const load = async () => {
       const { data, error } = await supabase
         .from('pickleball_registrations')
@@ -136,6 +139,7 @@ export default function Home() {
   const totalWaitCount = waitList.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
 
   const refreshData = async () => {
+    if (!currentSessionId) return;
     const { data, error } = await supabase
       .from('pickleball_registrations')
       .select('id, name, count, session_id, arrived')
@@ -144,6 +148,7 @@ export default function Home() {
     if (data) setList(data);
   };
 
+  // 送出報名
   const submit = async () => {
     if (!isAvailable) {
       alert('本分區本週無開放報名喔！');
@@ -201,6 +206,7 @@ export default function Home() {
     }
   };
 
+  // 送出現場報到
   const handleCheckInSubmit = async () => {
     if (!checkInName) {
       alert('請選擇您的暱稱！');
@@ -243,7 +249,7 @@ export default function Home() {
     <main className="min-h-screen bg-[#f0f4f8] text-[#2d3748] p-4 sm:p-8">
       <div className="max-w-2xl mx-auto space-y-6 sm:space-y-10 py-2 sm:py-6">
         
-        {/* 切換按鈕 */}
+        {/* 模式切換鈕 */}
         <div className="flex justify-end px-2">
           <button 
             onClick={() => setIsCheckInMode(!isCheckInMode)} 
@@ -255,7 +261,7 @@ export default function Home() {
           </button>
         </div>
 
-        {/* 標題 */}
+        {/* 大標題 */}
         <div className={`text-center p-6 sm:p-12 rounded-3xl shadow-md border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
           <h1 className={`text-3xl sm:text-6xl font-black tracking-wider leading-tight ${isCheckInMode ? 'text-[#d94800]' : 'text-[#0070C0]'}`}>
             七賢國小匹克球
@@ -265,7 +271,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* 日期 */}
+        {/* 日期按鈕 */}
         <div className="grid grid-cols-3 gap-3 sm:gap-6">
           {DAYS.map(d => (
             <button 
@@ -285,7 +291,7 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 組別 */}
+        {/* 組別按鈕 */}
         <div className="grid grid-cols-2 gap-3 sm:gap-6">
           {TYPES.map(t => (
             <button 
@@ -307,7 +313,13 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 表單內容 */}
+        {/* 看板 */}
+        <div className="bg-white border border-[#0070C0]/20 rounded-2xl p-4 sm:p-6 text-center space-y-1 shadow-sm">
+          <div className="text-2xl sm:text-4xl font-black text-[#0070C0] tracking-wide">⏰ 時間：19:00 - 21:20</div>
+          <div className="text-sm sm:text-base text-red-500 font-bold">⚠️ 當天 18:30 後即截止報名</div>
+        </div>
+
+        {/* 核心輸入表單 */}
         <div className={`p-5 sm:p-8 rounded-3xl shadow-xl border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
           {isCheckInMode ? (
             <div className="space-y-4">
@@ -377,7 +389,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* 名單 */}
+        {/* 正取名單 */}
         <div className="space-y-4">
           <h2 className="text-2xl sm:text-4xl font-black text-[#0070C0] px-2">
             正取名單 ({currentTotal} / {maxSeatsLimit})
@@ -401,7 +413,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* 備取 */}
+        {/* 備取名單 */}
         {!isCheckInMode && waitList.length > 0 && (
           <div className="space-y-4 pt-6 border-t-2 border-dashed border-slate-200">
             <h2 className="text-2xl font-black text-[#ff6d00] px-2">遞補備取：{totalWaitCount} 位</h2>
