@@ -60,14 +60,13 @@ export default function Home() {
   // 模式控制
   const [isCheckInMode, setIsCheckInMode] = useState(false);
   
-  // ✨ 管理員認證鎖 State
+  // 管理員認證鎖 State
   const [adminPin, setAdminPin] = useState('');
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
 
   // 表單 State
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
   const [checkInName, setCheckInName] = useState('');
-  const [checkInPwd, setCheckInPwd] = useState('');
 
   let isAvailable = false;
   if (selectedDay === 'mon' && selectedType === 'experience') isAvailable = true;
@@ -92,12 +91,10 @@ export default function Home() {
   const currentSessionId = `${activeDate}_${selectedType}`;
   const maxSeatsLimit = selectedType === 'experience' ? 9 : 8;
 
-  // ✨ 當切換模式時，自動重置管理員登入狀態與輸入框
   useEffect(() => {
     setAdminPin('');
     setIsAdminAuthenticated(false);
     setCheckInName('');
-    setCheckInPwd('');
   }, [isCheckInMode]);
 
   useEffect(() => {
@@ -106,7 +103,6 @@ export default function Home() {
       setForm(prev => ({ ...prev, count: '1' }));
     }
     setCheckInName('');
-    setCheckInPwd('');
   }, [selectedType]);
 
   useEffect(() => {
@@ -159,12 +155,11 @@ export default function Home() {
     if (data) setList(data);
   };
 
-  // 檢查管理員密碼（這裡設定為 8888，您可以自由修改）
   const verifyAdminPin = () => {
     if (adminPin === '8888') {
       setIsAdminAuthenticated(true);
     } else {
-      alert('❌ 管理員暗號錯誤！球友請勿亂點喔！');
+      alert('❌ 管理員暗號錯誤！');
       setAdminPin('');
     }
   };
@@ -227,33 +222,28 @@ export default function Home() {
     }
   };
 
-  // 送出現場報到
+  // ✨ 關鍵修正：由管理員代為點名，直接省略密碼驗證
   const handleCheckInSubmit = async () => {
     if (!checkInName) {
       alert('請選擇球友暱稱！');
-      return;
-    }
-    if (checkInPwd.length !== 4) {
-      alert('請輸入該球友報名時設定的 4 位密碼！');
       return;
     }
 
     const targetItem = list.find(item => item.name === checkInName);
     if (!targetItem) return;
 
+    // 直接將 arrived 更新為 true，免密碼
     const { data, error } = await supabase
       .from('pickleball_registrations')
       .update({ arrived: true })
       .eq('id', targetItem.id)
-      .eq('password', checkInPwd)
       .select();
 
-    if (error) alert('系統錯誤：' + error.message);
-    else if (data && data.length === 0) alert('❌ 該球友密碼輸入錯誤！');
-    else {
-      alert(`🎉 報到成功！歡迎【${checkInName}】到場！`);
+    if (error) {
+      alert('系統錯誤：' + error.message);
+    } else {
+      alert(`🎉 成功幫球友【${checkInName}】完成到場點名！`);
       setCheckInName('');
-      setCheckInPwd('');
       refreshData();
     }
   };
@@ -278,7 +268,7 @@ export default function Home() {
               isCheckInMode ? 'bg-[#ff6d00] text-white' : 'bg-[#0070C0] text-white hover:bg-[#005a9c]'
             }`}
           >
-            {isCheckInMode ? '🔄 切換回：網路報名模式' : '📌 進入：現場自主報到(管理員專用)'}
+            {isCheckInMode ? '🔄 切換回：網路報名模式' : '📌 進入：現場管理員點名主控台'}
           </button>
         </div>
 
@@ -288,11 +278,11 @@ export default function Home() {
             七賢國小匹克球
           </h1>
           <p className={`text-lg sm:text-2xl font-black tracking-widest border-t pt-3 mt-4 sm:mt-6 ${isCheckInMode ? 'text-[#d94800] border-[#ffd8a8]' : 'text-[#0070C0] border-[#b6d7a8]'}`}>
-            {isCheckInMode ? '📱 管理員現場報到主控台' : '新手免費體驗與新手區報名'}
+            {isCheckInMode ? '📱 主辦人現場一鍵點名系統' : '新手免費體驗與新手區報名'}
           </p>
         </div>
 
-        {/* 日期按鈕 */}
+        {/* 日期 */}
         <div className="grid grid-cols-3 gap-3 sm:gap-6">
           {DAYS.map(d => (
             <button 
@@ -312,7 +302,7 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 組別按鈕 */}
+        {/* 組別 */}
         <div className="grid grid-cols-2 gap-3 sm:gap-6">
           {TYPES.map(t => (
             <button 
@@ -343,7 +333,6 @@ export default function Home() {
         {/* 核心輸入表單 */}
         <div className={`p-5 sm:p-8 rounded-3xl shadow-xl border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
           {isCheckInMode ? (
-            /* ─── 現場自主報到介面（含管理員上鎖邏輯） ─── */
             !isAdminAuthenticated ? (
               <div className="space-y-4 text-center">
                 <div className="text-xl sm:text-2xl font-black text-[#d94800]">🔒 請輸入管理員專用暗號</div>
@@ -360,34 +349,27 @@ export default function Home() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="text-xl sm:text-2xl text-center font-black text-green-600">🔓 管理員已授權解鎖</div>
+                <div className="text-xl sm:text-2xl text-center font-black text-green-600">🔓 管理員已解鎖 ➡️ 一鍵免密碼點名</div>
                 <select 
-                  className="w-full p-4 bg-white rounded-2xl border-2 focus:border-[#ff6d00] focus:outline-none text-xl sm:text-2xl"
+                  className="w-full p-4 bg-white rounded-2xl border-2 focus:border-[#ff6d00] focus:outline-none text-xl sm:text-2xl text-[#1a1a1a]"
                   value={checkInName}
                   onChange={e => setCheckInName(e.target.value)}
                 >
-                  <option value="">-- 請選擇球友暱稱 --</option>
+                  <option value="">-- 請選擇到場球友的暱稱 --</option>
                   {list.map(item => (
                     <option key={item.id} value={item.name} disabled={item.arrived}>
-                      {item.name} ({item.count}位) {item.arrived ? ' [已報到]' : ''}
+                      {item.name} ({item.count}位) {item.arrived ? ' [已完成報到]' : ''}
                     </option>
                   ))}
                 </select>
-                <input 
-                  className="w-full p-4 bg-white rounded-2xl border-2 focus:border-[#ff6d00] focus:outline-none text-xl sm:text-2xl" 
-                  type="password" 
-                  placeholder="輸入該球友的 4 位密碼" 
-                  maxLength={4} 
-                  value={checkInPwd} 
-                  onChange={e => setCheckInPwd(e.target.value)} 
-                />
-                <button className="w-full bg-[#ff6d00] text-white p-4 rounded-2xl text-xl sm:text-2xl font-black hover:bg-[#e65c00]" onClick={handleCheckInSubmit}>
-                  確認完成報到
+                {/* ✨ 這裡已經把原本球友密碼的 input 輸入框徹底移除 */}
+                <button className="w-full bg-[#ff6d00] text-white p-4 rounded-2xl text-xl sm:text-2xl font-black hover:bg-[#e65c00] transition-all shadow-md" onClick={handleCheckInSubmit}>
+                  確認到場（直接點名）
                 </button>
               </div>
             )
           ) : (
-            /* ─── 網路報名介面 ─── */
+            /* 網路報名介面 */
             isAvailable ? (
               <div className="space-y-4">
                 <input 
