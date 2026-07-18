@@ -42,6 +42,18 @@ function getTargetDateStr(targetDayOfWeek) {
   return `${mm}/${dd}`;
 }
 
+// ✨ 新增：檢查目前是否已經超過星期六晚上 10 點
+function checkIsAfterSat2200() {
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 是週日，6 是週六
+  const currentHours = now.getHours();
+  
+  // 如果是星期六晚上 10 點之後，或者是星期日整天，回傳 true (代表進入下週新規則)
+  if (currentDay === 6 && currentHours >= 22) return true;
+  if (currentDay === 0) return true;
+  return false;
+}
+
 export default function Home() {
   const monDate = getTargetDateStr(1);
   const friDate = getTargetDateStr(5);
@@ -53,7 +65,16 @@ export default function Home() {
     { id: 'sat', label: '週六場', dateStr: satDate }
   ];
 
-  const [selectedDay, setSelectedDay] = useState('fri'); 
+  // 時間狀態判定
+  const [isNewRuleActive, setIsNewRuleActive] = useState(false);
+
+  // 初始化時間判定
+  useEffect(() => {
+    setIsNewRuleActive(checkIsAfterSat2200());
+  }, []);
+
+  // 根據目前時間與選擇日期決定預設值
+  const [selectedDay, setSelectedDay] = useState('mon'); 
   const [selectedType, setSelectedType] = useState('normal'); 
   const [list, setList] = useState([]);
   
@@ -68,25 +89,35 @@ export default function Home() {
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
   const [checkInName, setCheckInName] = useState('');
 
-  // ✨ 修改點 1：調整一、五、六開放權限（三天皆只開放新手區，新手體驗全關閉）
+  // 門檻權限判斷（改為動態時間判斷）
   let isAvailable = false;
-  if (selectedType === 'normal') {
-    if (selectedDay === 'mon' || selectedDay === 'fri' || selectedDay === 'sat') {
+  if (isNewRuleActive) {
+    // 🔴 下週新規則：三天都只開新手區
+    if (selectedType === 'normal' && (selectedDay === 'mon' || selectedDay === 'fri' || selectedDay === 'sat')) {
       isAvailable = true;
     }
+  } else {
+    // 🟢 本週舊規則
+    if (selectedDay === 'mon' && selectedType === 'experience') isAvailable = true;
+    if (selectedDay === 'fri' && selectedType === 'normal') isAvailable = true;
+    if (selectedDay === 'sat') isAvailable = true;
   }
 
-  // ✨ 修改點 2：更新組別按鈕後的狀態提示文字
+  // 動態呈現組別文字
   const TYPES = [
     { 
       id: 'experience', 
       label: '新手體驗', 
-      note: '本週無開放' 
+      note: isNewRuleActive 
+        ? '本週無開放' 
+        : ((selectedDay === 'mon' || selectedDay === 'sat') ? '開放報名' : '本週無開放')
     },
     { 
       id: 'normal', 
       label: '新手區', 
-      note: '開放報名' 
+      note: isNewRuleActive
+        ? '開放報名'
+        : ((selectedDay === 'fri' || selectedDay === 'sat') ? '開放報名' : '本週無開放')
     }
   ];
 
@@ -94,8 +125,10 @@ export default function Home() {
   const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
   const currentSessionId = `${activeDate}_${selectedType}`;
   
-  // ✨ 修改點 3：人數限制全面統一為 8 位
-  const maxSeatsLimit = 8;
+  // 動態決定容納人數上限
+  const maxSeatsLimit = isNewRuleActive 
+    ? 8 
+    : (selectedType === 'experience' ? 9 : 8);
 
   useEffect(() => {
     setAdminPin('');
@@ -105,17 +138,24 @@ export default function Home() {
 
   useEffect(() => {
     const numericCount = parseInt(form.count);
-    // 新手區限制單筆最多 2 位
     if (selectedType === 'normal' && numericCount > 2) {
       setForm(prev => ({ ...prev, count: '1' }));
     }
     setCheckInName('');
   }, [selectedType]);
 
-  // ✨ 修改點 4：預設切換天數時，自動幫球友選到有開放的「normal 新手區」
+  // 切換日期時自動對應組別
   useEffect(() => {
-    setSelectedType('normal');
-  }, [selectedDay]);
+    if (isNewRuleActive) {
+      setSelectedType('normal'); // 新規則下大家一律導向新手區
+    } else {
+      if (selectedDay === 'mon') {
+        setSelectedType('experience');
+      } else if (selectedDay === 'fri') {
+        setSelectedType('normal');
+      }
+    }
+  }, [selectedDay, isNewRuleActive]);
 
   // 讀取資料
   useEffect(() => { 
@@ -190,6 +230,10 @@ export default function Home() {
     }
 
     const numericCount = parseInt(form.count);
+    if (!isNewRuleActive && selectedType === 'experience' && (numericCount < 1 || numericCount > 4)) {
+      alert('🚫 新手體驗單筆報名最多 4 位球友喔！');
+      return;
+    }
     if (selectedType === 'normal' && (numericCount < 1 || numericCount > 2)) {
       alert('🚫 新手區單筆報名最多 2 位球友喔！');
       return;
@@ -222,7 +266,7 @@ export default function Home() {
     }
   };
 
-  // 一鍵管理員點名
+  // 管理員代為點名
   const handleCheckInSubmit = async () => {
     if (!checkInName) {
       alert('請選擇球友暱稱！');
@@ -277,7 +321,7 @@ export default function Home() {
             七賢國小匹克球
           </h1>
           <p className={`text-lg sm:text-2xl font-black tracking-widest border-t pt-3 mt-4 sm:mt-6 ${isCheckInMode ? 'text-[#d94800] border-[#ffd8a8]' : 'text-[#0070C0] border-[#b6d7a8]'}`}>
-            {isCheckInMode ? '📱 主辦人現場一鍵點名系統' : '新手免費體驗與新手區報名'}
+            {isCheckInMode ? '📱 主辦人現場一鍵點名系統' : (isNewRuleActive ? '下週新手區限額報名（體驗暫停）' : '新手免費體驗與新手區報名')}
           </p>
         </div>
 
@@ -367,7 +411,6 @@ export default function Home() {
               </div>
             )
           ) : (
-            /* 網路報名介面 */
             isAvailable ? (
               <div className="space-y-4">
                 <input 
@@ -383,6 +426,12 @@ export default function Home() {
                 >
                   <option value="1">1 位</option>
                   <option value="2">2 位</option>
+                  {!isNewRuleActive && selectedType === 'experience' && (
+                    <>
+                      <option value="3">3 位</option>
+                      <option value="4">4 位</option>
+                    </>
+                  )}
                 </select>
                 <input 
                   className="w-full p-4 bg-white rounded-2xl border-2 focus:border-[#0070C0] focus:outline-none text-xl sm:text-2xl" 
@@ -397,7 +446,7 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              <div className="text-center py-6 font-bold text-red-600">本週此分區無開放，請切換組別。</div>
+              <div className="text-center py-6 font-bold text-red-600">本分區本週暫無開放報名喔！</div>
             )
           )}
         </div>
