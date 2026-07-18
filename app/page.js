@@ -68,28 +68,34 @@ export default function Home() {
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
   const [checkInName, setCheckInName] = useState('');
 
+  // ✨ 修改點 1：調整一、五、六開放權限（三天皆只開放新手區，新手體驗全關閉）
   let isAvailable = false;
-  if (selectedDay === 'mon' && selectedType === 'experience') isAvailable = true;
-  if (selectedDay === 'fri' && selectedType === 'normal') isAvailable = true;
-  if (selectedDay === 'sat') isAvailable = true; 
+  if (selectedType === 'normal') {
+    if (selectedDay === 'mon' || selectedDay === 'fri' || selectedDay === 'sat') {
+      isAvailable = true;
+    }
+  }
 
+  // ✨ 修改點 2：更新組別按鈕後的狀態提示文字
   const TYPES = [
     { 
       id: 'experience', 
       label: '新手體驗', 
-      note: (selectedDay === 'mon' || selectedDay === 'sat') ? '開放報名' : '本週無開放' 
+      note: '本週無開放' 
     },
     { 
       id: 'normal', 
       label: '新手區', 
-      note: (selectedDay === 'fri' || selectedDay === 'sat') ? '開放報名' : '本週無開放' 
+      note: '開放報名' 
     }
   ];
 
   const activeDayConfig = DAYS.find(d => d.id === selectedDay);
   const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
   const currentSessionId = `${activeDate}_${selectedType}`;
-  const maxSeatsLimit = selectedType === 'experience' ? 9 : 8;
+  
+  // ✨ 修改點 3：人數限制全面統一為 8 位
+  const maxSeatsLimit = 8;
 
   useEffect(() => {
     setAdminPin('');
@@ -99,18 +105,16 @@ export default function Home() {
 
   useEffect(() => {
     const numericCount = parseInt(form.count);
+    // 新手區限制單筆最多 2 位
     if (selectedType === 'normal' && numericCount > 2) {
       setForm(prev => ({ ...prev, count: '1' }));
     }
     setCheckInName('');
   }, [selectedType]);
 
+  // ✨ 修改點 4：預設切換天數時，自動幫球友選到有開放的「normal 新手區」
   useEffect(() => {
-    if (selectedDay === 'mon') {
-      setSelectedType('experience');
-    } else if (selectedDay === 'fri') {
-      setSelectedType('normal');
-    }
+    setSelectedType('normal');
   }, [selectedDay]);
 
   // 讀取資料
@@ -186,10 +190,6 @@ export default function Home() {
     }
 
     const numericCount = parseInt(form.count);
-    if (selectedType === 'experience' && (numericCount < 1 || numericCount > 4)) {
-      alert('🚫 新手體驗單筆報名最多 4 位球友喔！');
-      return;
-    }
     if (selectedType === 'normal' && (numericCount < 1 || numericCount > 2)) {
       alert('🚫 新手區單筆報名最多 2 位球友喔！');
       return;
@@ -222,7 +222,7 @@ export default function Home() {
     }
   };
 
-  // ✨ 關鍵修正：由管理員代為點名，直接省略密碼驗證
+  // 一鍵管理員點名
   const handleCheckInSubmit = async () => {
     if (!checkInName) {
       alert('請選擇球友暱稱！');
@@ -232,7 +232,6 @@ export default function Home() {
     const targetItem = list.find(item => item.name === checkInName);
     if (!targetItem) return;
 
-    // 直接將 arrived 更新為 true，免密碼
     const { data, error } = await supabase
       .from('pickleball_registrations')
       .update({ arrived: true })
@@ -362,7 +361,6 @@ export default function Home() {
                     </option>
                   ))}
                 </select>
-                {/* ✨ 這裡已經把原本球友密碼的 input 輸入框徹底移除 */}
                 <button className="w-full bg-[#ff6d00] text-white p-4 rounded-2xl text-xl sm:text-2xl font-black hover:bg-[#e65c00] transition-all shadow-md" onClick={handleCheckInSubmit}>
                   確認到場（直接點名）
                 </button>
@@ -385,12 +383,6 @@ export default function Home() {
                 >
                   <option value="1">1 位</option>
                   <option value="2">2 位</option>
-                  {selectedType === 'experience' && (
-                    <>
-                      <option value="3">3 位</option>
-                      <option value="4">4 位</option>
-                    </>
-                  )}
                 </select>
                 <input 
                   className="w-full p-4 bg-white rounded-2xl border-2 focus:border-[#0070C0] focus:outline-none text-xl sm:text-2xl" 
