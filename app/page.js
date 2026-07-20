@@ -317,9 +317,9 @@ export default function Home() {
                   </span>
                 </div>
 
-                {/* 🔴 網站更新提示（鮮紅色顯眼標示）🔴 */}
+                {/* 🔴 網站更新提示（已修正文字）🔴 */}
                 <p className="text-red-600 text-sm sm:text-lg font-black tracking-wider pt-1 flex items-center justify-center gap-1">
-                  <span>⏰</span> 網站報名每週六晚上 10 點點更新
+                  <span>⏰</span> 網站報名每週六晚上 10 點更新
                 </p>
               </>
             )}
