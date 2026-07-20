@@ -57,7 +57,6 @@ export default function Home() {
   const [list, setList] = useState([]);
   const [isCheckInMode, setIsCheckInMode] = useState(false);
   
-  // 管理員驗證與連點計數器
   const [adminPin, setAdminPin] = useState('');
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [clickCount, setClickCount] = useState(0);
@@ -65,7 +64,17 @@ export default function Home() {
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
   const [checkInName, setCheckInName] = useState('');
 
-  // 神祕入口（點擊「球」字 3 下）
+  const loadSettings = async () => {
+    const { data } = await supabase.from('pickleball_settings').select('*').eq('id', 'next_week_config').single();
+    if (data) setConfig(data);
+  };
+
+  useEffect(() => {
+    setIsNewRuleActive(checkIsAfterSat2200());
+    loadSettings();
+  }, []);
+
+  // ✨ 連點神秘入口邏輯
   const handleSecretClick = () => {
     const newCount = clickCount + 1;
     if (newCount >= 3) {
@@ -77,14 +86,38 @@ export default function Home() {
     }
   };
 
-  // ✨ 正確邏輯：三天都「只開放新手區」，關閉新手體驗
   let isAvailable = false;
-  if (selectedType === 'normal') {
-    isAvailable = true;
+  let maxSeatsLimit = 8;
+
+  if (isNewRuleActive) {
+    if (selectedDay === 'mon') {
+      if (selectedType === 'experience') { isAvailable = config.mon_experience_open; maxSeatsLimit = config.mon_experience_limit; }
+      if (selectedType === 'normal') { isAvailable = config.mon_normal_open; maxSeatsLimit = config.mon_normal_limit; }
+    } else if (selectedDay === 'fri') {
+      if (selectedType === 'experience') { isAvailable = config.fri_experience_open; maxSeatsLimit = config.fri_experience_limit; }
+      if (selectedType === 'normal') { isAvailable = config.fri_normal_open; maxSeatsLimit = config.fri_normal_limit; }
+    } else if (selectedDay === 'sat') {
+      if (selectedType === 'experience') { isAvailable = config.sat_experience_open; maxSeatsLimit = config.sat_experience_limit; }
+      if (selectedType === 'normal') { isAvailable = config.sat_normal_open; maxSeatsLimit = config.sat_normal_limit; }
+    }
+  } else {
+    if (selectedDay === 'mon' && selectedType === 'experience') { isAvailable = true; maxSeatsLimit = 9; }
+    if (selectedDay === 'fri' && selectedType === 'normal') { isAvailable = true; maxSeatsLimit = 8; }
+    if (selectedDay === 'sat') { isAvailable = true; maxSeatsLimit = selectedType === 'experience' ? 9 : 8; }
   }
 
-  // 人數一律固定為 8 位
-  const maxSeatsLimit = 8;
+  const getNote = (typeId) => {
+    if (!isNewRuleActive) {
+      if (selectedDay === 'mon' && typeId === 'experience') return '開放報名';
+      if (selectedDay === 'fri' && typeId === 'normal') return '開放報名';
+      if (selectedDay === 'sat') return '開放報名';
+      return '本週無開放';
+    }
+    if (selectedDay === 'mon') return typeId === 'experience' ? (config.mon_experience_open ? '開放報名' : '本週無開放') : (config.mon_normal_open ? '開放報名' : '本週無開放');
+    if (selectedDay === 'fri') return typeId === 'experience' ? (config.fri_experience_open ? '開放報名' : '本週無開放') : (config.fri_normal_open ? '開放報名' : '本週無開放');
+    if (selectedDay === 'sat') return typeId === 'experience' ? (config.sat_experience_open ? '開放報名' : '本週無開放') : (config.sat_normal_open ? '開放報名' : '本週無開放');
+    return '本週無開放';
+  };
 
   const TYPES = [
     { id: 'experience', label: '新手體驗', note: '本週無開放' },
@@ -94,11 +127,6 @@ export default function Home() {
   const activeDayConfig = DAYS.find(d => d.id === selectedDay);
   const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
   const currentSessionId = `${activeDate}_${selectedType}`;
-
-  // 切換日期時，自動把選項固定在「新手區」
-  useEffect(() => {
-    setSelectedType('normal');
-  }, [selectedDay]);
 
   useEffect(() => {
     setAdminPin('');
