@@ -40,15 +40,6 @@ function getTargetDateStr(targetDayOfWeek) {
   return `${mm}/${dd}`;
 }
 
-function checkIsAfterSat2200() {
-  const now = new Date();
-  const currentDay = now.getDay(); 
-  const currentHours = now.getHours();
-  if (currentDay === 6 && currentHours >= 22) return true;
-  if (currentDay === 0) return true;
-  return false;
-}
-
 export default function Home() {
   const monDate = getTargetDateStr(1);
   const friDate = getTargetDateStr(5);
@@ -60,6 +51,7 @@ export default function Home() {
     { id: 'sat', label: '週六場', dateStr: satDate }
   ];
 
+  // 預設進來就是選「新手區」
   const [selectedDay, setSelectedDay] = useState('mon'); 
   const [selectedType, setSelectedType] = useState('normal'); 
   const [list, setList] = useState([]);
@@ -70,80 +62,43 @@ export default function Home() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [clickCount, setClickCount] = useState(0);
 
-  const [config, setConfig] = useState({
-    mon_experience_open: false, mon_experience_limit: 9, mon_normal_open: true, mon_normal_limit: 8,
-    fri_experience_open: false, fri_experience_limit: 9, fri_normal_open: true, fri_normal_limit: 8,
-    sat_experience_open: false, sat_experience_limit: 9, sat_normal_open: true, sat_normal_limit: 8
-  });
-
-  const [isNewRuleActive, setIsNewRuleActive] = useState(false);
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
   const [checkInName, setCheckInName] = useState('');
 
-  const loadSettings = async () => {
-    const { data } = await supabase.from('pickleball_settings').select('*').eq('id', 'next_week_config').single();
-    if (data) setConfig(data);
-  };
-
-  useEffect(() => {
-    setIsNewRuleActive(checkIsAfterSat2200());
-    loadSettings();
-  }, []);
-
-  // ✨ 連點神秘入口邏輯
+  // 神祕入口（點擊「球」字 3 下）
   const handleSecretClick = () => {
     const newCount = clickCount + 1;
     if (newCount >= 3) {
-      setIsCheckInMode(!isCheckInMode); // 切換後台模式
-      setClickCount(0); // 重置計數
+      setIsCheckInMode(!isCheckInMode);
+      setClickCount(0);
     } else {
       setClickCount(newCount);
-      // 1.5秒內沒繼續點就重置，防止球友誤觸
       setTimeout(() => setClickCount(0), 1500);
     }
   };
 
+  // ✨ 正確邏輯：三天都「只開放新手區」，關閉新手體驗
   let isAvailable = false;
-  let maxSeatsLimit = 8;
-
-  if (isNewRuleActive) {
-    if (selectedDay === 'mon') {
-      if (selectedType === 'experience') { isAvailable = config.mon_experience_open; maxSeatsLimit = config.mon_experience_limit; }
-      if (selectedType === 'normal') { isAvailable = config.mon_normal_open; maxSeatsLimit = config.mon_normal_limit; }
-    } else if (selectedDay === 'fri') {
-      if (selectedType === 'experience') { isAvailable = config.fri_experience_open; maxSeatsLimit = config.fri_experience_limit; }
-      if (selectedType === 'normal') { isAvailable = config.fri_normal_open; maxSeatsLimit = config.fri_normal_limit; }
-    } else if (selectedDay === 'sat') {
-      if (selectedType === 'experience') { isAvailable = config.sat_experience_open; maxSeatsLimit = config.sat_experience_limit; }
-      if (selectedType === 'normal') { isAvailable = config.sat_normal_open; maxSeatsLimit = config.sat_normal_limit; }
-    }
-  } else {
-    if (selectedDay === 'mon' && selectedType === 'experience') { isAvailable = true; maxSeatsLimit = 9; }
-    if (selectedDay === 'fri' && selectedType === 'normal') { isAvailable = true; maxSeatsLimit = 8; }
-    if (selectedDay === 'sat') { isAvailable = true; maxSeatsLimit = selectedType === 'experience' ? 9 : 8; }
+  if (selectedType === 'normal') {
+    isAvailable = true;
   }
 
-  const getNote = (typeId) => {
-    if (!isNewRuleActive) {
-      if (selectedDay === 'mon' && typeId === 'experience') return '開放報名';
-      if (selectedDay === 'fri' && typeId === 'normal') return '開放報名';
-      if (selectedDay === 'sat') return '開放報名';
-      return '本週無開放';
-    }
-    if (selectedDay === 'mon') return typeId === 'experience' ? (config.mon_experience_open ? '開放報名' : '本週無開放') : (config.mon_normal_open ? '開放報名' : '本週無開放');
-    if (selectedDay === 'fri') return typeId === 'experience' ? (config.fri_experience_open ? '開放報名' : '本週無開放') : (config.fri_normal_open ? '開放報名' : '本週無開放');
-    if (selectedDay === 'sat') return typeId === 'experience' ? (config.sat_experience_open ? '開放報名' : '本週無開放') : (config.sat_normal_open ? '開放報名' : '本週無開放');
-    return '本週無開放';
-  };
+  // 人數一律固定為 8 位
+  const maxSeatsLimit = 8;
 
   const TYPES = [
-    { id: 'experience', label: '新手體驗', note: getNote('experience') },
-    { id: 'normal', label: '新手區', note: getNote('normal') }
+    { id: 'experience', label: '新手體驗', note: '本週無開放' },
+    { id: 'normal', label: '新手區', note: '開放報名' }
   ];
 
   const activeDayConfig = DAYS.find(d => d.id === selectedDay);
   const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
   const currentSessionId = `${activeDate}_${selectedType}`;
+
+  // 切換日期時，自動把選項固定在「新手區」
+  useEffect(() => {
+    setSelectedType('normal');
+  }, [selectedDay]);
 
   useEffect(() => {
     setAdminPin('');
@@ -159,6 +114,7 @@ export default function Home() {
     setCheckInName('');
   }, [selectedType]);
 
+  // 讀取報名資料
   useEffect(() => { 
     if (!currentSessionId) return;
     const load = async () => {
@@ -190,12 +146,6 @@ export default function Home() {
     else { alert('❌ 管理員暗號錯誤！'); setAdminPin(''); }
   };
 
-  const saveAdminSettings = async () => {
-    const { error } = await supabase.from('pickleball_settings').update(config).eq('id', 'next_week_config');
-    if (error) { alert('儲存失敗：' + error.message); } 
-    else { alert('🎉 成功寫入下週排程設定！這套新設定會在星期六晚上 22:00 自動生效！'); }
-  };
-
   const submit = async () => {
     if (!isAvailable) { alert('本分區本週無開放報名喔！'); return; }
     const now = new Date();
@@ -205,11 +155,15 @@ export default function Home() {
     const todayStr = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
 
     if (activeDate === todayStr && currentTimeValue >= 1830) { alert('🚫 抱歉！今天的報名已於 18:30 截止囉！'); return; }
+    
+    const numericCount = parseInt(form.count);
+    if (numericCount < 1 || numericCount > 2) { alert('🚫 新手區單筆報名最多 2 位球友喔！'); return; }
+
     const trimmedName = form.name.trim();
     if (!trimmedName || form.password.length !== 4) { alert('請輸入暱稱與 4 位密碼'); return; }
     if (list.some(item => item.name.toLowerCase() === trimmedName.toLowerCase())) { alert(`❌ 暱稱「${trimmedName}」已被使用！`); return; }
 
-    const { error } = await supabase.from('pickleball_registrations').insert([{ name: trimmedName, count: parseInt(form.count), password: form.password, session_id: currentSessionId, created_at: new Date().toISOString(), arrived: false }]);
+    const { error } = await supabase.from('pickleball_registrations').insert([{ name: trimmedName, count: numericCount, password: form.password, session_id: currentSessionId, created_at: new Date().toISOString(), arrived: false }]);
     if (error) alert('報名失敗：' + error.message);
     else { alert('登記成功！'); setForm({ name: '', count: '1', password: '' }); refreshData(); }
   };
@@ -235,18 +189,16 @@ export default function Home() {
     <main className="min-h-screen bg-[#f0f4f8] text-[#2d3748] p-4 sm:p-8">
       <div className="max-w-2xl mx-auto space-y-6 sm:space-y-10 py-2 sm:py-6">
         
-        {/* ✨ 頂部無藍色按蹤跡，保持畫面極簡乾淨 */}
         <div className="h-4"></div>
 
         {/* 大標題 */}
         <div className={`text-center p-6 sm:p-12 rounded-3xl shadow-md border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
           <h1 className={`text-3xl sm:text-6xl font-black tracking-wider leading-tight select-none ${isCheckInMode ? 'text-[#d94800]' : 'text-[#0070C0]'}`}>
             七賢國小匹克
-            {/* ✨ 隱藏傳送門核心：球友看沒區別，但管理員連續點擊 3 下這個「球」字就會觸發後台開關！ */}
             <span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">球</span>
           </h1>
           <p className={`text-lg sm:text-2xl font-black tracking-widest border-t pt-3 mt-4 sm:mt-6 ${isCheckInMode ? 'text-[#d94800] border-[#ffd8a8]' : 'text-[#0070C0] border-[#b6d7a8]'}`}>
-            {isCheckInMode ? '📱 管理員後台主控台 (按「球」字可退出)' : '免費體驗與新手區報名'}
+            {isCheckInMode ? '📱 管理員現場點名主控台 (按「球」字可退出)' : '新手區限額報名（體驗暫停）'}
           </p>
         </div>
 
@@ -276,7 +228,7 @@ export default function Home() {
           <div className="text-sm sm:text-base text-red-500 font-bold">⚠️ 當天 18:30 後即截止報名</div>
         </div>
 
-        {/* 核心輸入表單 / 管理員操作面板 */}
+        {/* 表單 / 點名區 */}
         <div className={`p-5 sm:p-8 rounded-3xl shadow-xl border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
           {isCheckInMode ? (
             !isAdminAuthenticated ? (
@@ -286,45 +238,13 @@ export default function Home() {
                 <button className="w-full bg-[#ff6d00] text-white p-4 rounded-2xl text-xl font-black" onClick={verifyAdminPin}>解除鎖定</button>
               </div>
             ) : (
-              <div className="space-y-8">
-                {/* 快速點名區 */}
-                <div className="space-y-3 pb-6 border-b-2 border-dashed border-[#ffd8a8]">
-                  <div className="text-xl sm:text-2xl font-black text-[#d94800] text-center">📋 現場快速點名區</div>
-                  <select className="w-full p-4 bg-white rounded-2xl text-xl" value={checkInName} onChange={e => setCheckInName(e.target.value)}>
-                    <option value="">-- 請選擇到場球友的暱稱 --</option>
-                    {list.map(item => (<option key={item.id} value={item.name} disabled={item.arrived}>{item.name} ({item.count}位) {item.arrived ? ' [已報到]' : ''}</option>))}
-                  </select>
-                  <button className="w-full bg-green-600 text-white p-4 rounded-2xl text-xl font-black hover:bg-green-700" onClick={handleCheckInSubmit}>確認到場（直接點名）</button>
-                </div>
-
-                {/* 後台控制面板 */}
-                <div className="space-y-4">
-                  <div className="text-xl sm:text-2xl font-black text-blue-800 text-center">⚙️ 下週場次人數與區域控制面板</div>
-                  <div className="space-y-3 bg-white/70 p-4 rounded-2xl space-y-4">
-                    <div className="flex flex-col gap-2 border-b pb-3">
-                      <span className="font-bold text-lg text-slate-700">📅 週一場：</span>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <label className="flex items-center gap-1"><input type="checkbox" checked={config.mon_experience_open} onChange={e => setConfig({...config, mon_experience_open: e.target.checked})} /> 新手體驗 (限額:<input type="number" className="w-12 border text-center rounded ml-1" value={config.mon_experience_limit} onChange={e => setConfig({...config, mon_experience_limit: parseInt(e.target.value)||0})} />人)</label>
-                        <label className="flex items-center gap-1"><input type="checkbox" checked={config.mon_normal_open} onChange={e => setConfig({...config, mon_normal_open: e.target.checked})} /> 新手區 (限額:<input type="number" className="w-12 border text-center rounded ml-1" value={config.mon_normal_limit} onChange={e => setConfig({...config, mon_normal_limit: parseInt(e.target.value)||0})} />人)</label>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2 border-b pb-3">
-                      <span className="font-bold text-lg text-slate-700">📅 週五場：</span>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <label className="flex items-center gap-1"><input type="checkbox" checked={config.fri_experience_open} onChange={e => setConfig({...config, fri_experience_open: e.target.checked})} /> 新手體驗 (限額:<input type="number" className="w-12 border text-center rounded ml-1" value={config.fri_experience_limit} onChange={e => setConfig({...config, fri_experience_limit: parseInt(e.target.value)||0})} />人)</label>
-                        <label className="flex items-center gap-1"><input type="checkbox" checked={config.fri_normal_open} onChange={e => setConfig({...config, fri_normal_open: e.target.checked})} /> 新手區 (限額:<input type="number" className="w-12 border text-center rounded ml-1" value={config.fri_normal_limit} onChange={e => setConfig({...config, fri_normal_limit: parseInt(e.target.value)||0})} />人)</label>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <span className="font-bold text-lg text-slate-700">📅 週六場：</span>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <label className="flex items-center gap-1"><input type="checkbox" checked={config.sat_experience_open} onChange={e => setConfig({...config, sat_experience_open: e.target.checked})} /> 新手體驗 (限額:<input type="number" className="w-12 border text-center rounded ml-1" value={config.sat_experience_limit} onChange={e => setConfig({...config, sat_experience_limit: parseInt(e.target.value)||0})} />人)</label>
-                        <label className="flex items-center gap-1"><input type="checkbox" checked={config.sat_normal_open} onChange={e => setConfig({...config, sat_normal_open: e.target.checked})} /> 新手區 (限額:<input type="number" className="w-12 border text-center rounded ml-1" value={config.sat_normal_limit} onChange={e => setConfig({...config, sat_normal_limit: parseInt(e.target.value)||0})} />人)</label>
-                      </div>
-                    </div>
-                  </div>
-                  <button className="w-full bg-blue-700 text-white p-4 rounded-2xl text-xl font-black" onClick={saveAdminSettings}>儲存下週設定</button>
-                </div>
+              <div className="space-y-4">
+                <div className="text-xl sm:text-2xl font-black text-[#d94800] text-center">📋 現場快速點名區</div>
+                <select className="w-full p-4 bg-white rounded-2xl text-xl" value={checkInName} onChange={e => setCheckInName(e.target.value)}>
+                  <option value="">-- 請選擇到場球友的暱稱 --</option>
+                  {list.map(item => (<option key={item.id} value={item.name} disabled={item.arrived}>{item.name} ({item.count}位) {item.arrived ? ' [已報到]' : ''}</option>))}
+                </select>
+                <button className="w-full bg-green-600 text-white p-4 rounded-2xl text-xl font-black hover:bg-green-700" onClick={handleCheckInSubmit}>確認到場（直接點名）</button>
               </div>
             )
           ) : (
@@ -333,7 +253,6 @@ export default function Home() {
                 <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                 <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
                   <option value="1">1 位</option> <option value="2">2 位</option>
-                  {selectedType === 'experience' && <><option value="3">3 位</option><option value="4">4 位</option></>}
                 </select>
                 <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" type="password" placeholder="取消密碼 (4位數字)" maxLength={4} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
                 <button className="w-full bg-[#0070C0] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
