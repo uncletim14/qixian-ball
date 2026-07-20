@@ -286,29 +286,40 @@ export default function Home() {
         
         <div className="h-4"></div>
 
-        {/* 大標題 */}
-        <div className={`text-center p-6 sm:p-12 rounded-3xl shadow-md border transition-all ${isSelfCheckIn ? 'bg-[#e6fcf5] border-[#63e6be]' : isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
-          <h1 className={`text-3xl sm:text-6xl font-black tracking-wider leading-tight select-none ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#0070C0]'}`}>
-            七賢國小匹克
-            <span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">球</span>
-          </h1>
+        {/* 🌟 大標題與活潑視覺排版 🌟 */}
+        <div className={`text-center p-6 sm:p-10 rounded-3xl shadow-lg border-2 transition-all ${isSelfCheckIn ? 'bg-[#e6fcf5] border-[#63e6be]' : isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
           
-          <div className={`border-t pt-3 mt-4 sm:mt-6 space-y-1 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#b6d7a8]'}`}>
+          <h1 className={`text-3xl sm:text-5xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#0070C0]'}`}>
+            七賢國小新手交流<span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">團</span>
+          </h1>
+
+          <div className={`border-t-2 border-dashed pt-4 mt-4 sm:mt-6 space-y-3 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#b6d7a8]'}`}>
             {isSelfCheckIn ? (
-              <p className="text-[#0ca678] text-sm sm:text-xl font-extrabold tracking-wide">
+              <p className="text-[#0ca678] text-base sm:text-xl font-extrabold tracking-wide animate-pulse">
                 📱 現場自助報到專區 (限 18:30 - 21:00)
               </p>
             ) : isCheckInMode ? (
-              <p className="text-[#d94800] text-sm sm:text-xl font-extrabold tracking-wide">
+              <p className="text-[#d94800] text-base sm:text-xl font-extrabold tracking-wide">
                 📱 管理員現場點名主控台
               </p>
             ) : (
               <>
-                <p className="text-[#0070C0] text-sm sm:text-xl font-extrabold tracking-wide">
-                  新手單次100 / 租借球拍50 / 新手體驗免費
-                </p>
-                <p className="text-[#0070C0] text-xs sm:text-lg font-bold tracking-wider opacity-90">
-                  網站報名每週六晚上10點更新
+                {/* 活潑標籤區塊 */}
+                <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 text-xs sm:text-base font-extrabold">
+                  <span className="bg-white/80 text-[#0070C0] px-3 py-1.5 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1">
+                    🎽 新手單次 $100
+                  </span>
+                  <span className="bg-white/80 text-[#0070C0] px-3 py-1.5 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1">
+                    🏓 租借球拍 $50
+                  </span>
+                  <span className="bg-emerald-500 text-white px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1">
+                    🎁 新手體驗免費
+                  </span>
+                </div>
+
+                {/* 🔴 網站更新提示（鮮紅色顯眼標示）🔴 */}
+                <p className="text-red-600 text-sm sm:text-lg font-black tracking-wider pt-1 flex items-center justify-center gap-1">
+                  <span>⏰</span> 網站報名每週六晚上 10 點點更新
                 </p>
               </>
             )}
