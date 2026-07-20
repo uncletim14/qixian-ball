@@ -64,6 +64,7 @@ export default function Home() {
 
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
   const [checkInName, setCheckInName] = useState('');
+  const [checkInPassword, setCheckInPassword] = useState(''); // 新增：自助報到密碼狀態
   const [userWarning, setUserWarning] = useState(''); 
 
   // 檢查是否為掃碼進來的模式 (?mode=checkin)
@@ -107,6 +108,7 @@ export default function Home() {
     setAdminPin('');
     setIsAdminAuthenticated(false);
     setCheckInName('');
+    setCheckInPassword('');
   }, [isCheckInMode]);
 
   useEffect(() => {
@@ -115,9 +117,10 @@ export default function Home() {
       setForm(prev => ({ ...prev, count: '1' }));
     }
     setCheckInName('');
+    setCheckInPassword('');
   }, [selectedType, form.count]);
 
-  // 當球友輸入暱稱時，即時查詢並顯示警示提醒（純警示、不阻擋）
+  // 當球友輸入暱稱時，即時查詢違規紀錄
   useEffect(() => {
     const trimmedName = form.name.trim();
     if (!trimmedName) {
@@ -138,11 +141,11 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [form.name]);
 
-  // 讀取報名資料
+  // 讀取報名資料 (包含 password 欄位以利驗證)
   useEffect(() => { 
     if (!currentSessionId) return;
     const load = async () => {
-      const { data } = await supabase.from('pickleball_registrations').select('id, name, count, session_id, arrived').eq('session_id', currentSessionId).order('created_at', { ascending: true });
+      const { data } = await supabase.from('pickleball_registrations').select('id, name, count, password, session_id, arrived').eq('session_id', currentSessionId).order('created_at', { ascending: true });
       if (data) setList(data);
     };
     load(); 
@@ -161,7 +164,7 @@ export default function Home() {
 
   const refreshData = async () => {
     if (!currentSessionId) return;
-    const { data } = await supabase.from('pickleball_registrations').select('id, name, count, session_id, arrived').eq('session_id', currentSessionId).order('created_at', { ascending: true });
+    const { data } = await supabase.from('pickleball_registrations').select('id, name, count, password, session_id, arrived').eq('session_id', currentSessionId).order('created_at', { ascending: true });
     if (data) setList(data);
   };
 
@@ -170,7 +173,7 @@ export default function Home() {
     else { alert('❌ 管理員暗號錯誤！'); setAdminPin(''); }
   };
 
-  // 報名提交（只跳提示，完全不阻擋報名）
+  // 報名提交
   const submit = async () => {
     if (!isAvailable) { alert('本分區本週無開放報名喔！'); return; }
     const now = new Date();
@@ -198,10 +201,11 @@ export default function Home() {
     }
   };
 
-  // 報到提交（限制 18:30 ~ 21:00）
+  // 報到提交（包含密碼核對與時間限制）
   const handleCheckInSubmit = async () => {
     if (!checkInName) { alert('請選擇你的暱稱！'); return; }
 
+    // 管理員手動點名不需要密碼，球友自助報到才需要密碼與時間驗證
     if (isSelfCheckIn) {
       const now = new Date();
       const timeVal = now.getHours() * 100 + now.getMinutes();
@@ -209,20 +213,34 @@ export default function Home() {
         alert('🚫 目前非報到時間！現場開放報到時間為 18:30 ~ 21:00。');
         return;
       }
+
+      if (!checkInPassword || checkInPassword.length !== 4) {
+        alert('請輸入報名時設定的 4 位數密碼！');
+        return;
+      }
     }
 
     const targetItem = list.find(item => item.name === checkInName);
     if (!targetItem) return;
+
+    // 球友自助報到時核對密碼
+    if (isSelfCheckIn && targetItem.password !== checkInPassword) {
+      alert('❌ 密碼錯誤！請輸入報名時設定的 4 位數密碼。');
+      setCheckInPassword('');
+      return;
+    }
+
     const { error } = await supabase.from('pickleball_registrations').update({ arrived: true }).eq('id', targetItem.id);
     if (error) alert('系統錯誤：' + error.message);
     else { 
-      alert(`🎉 成功幫【${checkInName}】完成現場報到！`); 
+      alert(`🎉 密碼驗證成功！已幫【${checkInName}】完成現場報到！`); 
       setCheckInName(''); 
+      setCheckInPassword('');
       refreshData(); 
     }
   };
 
-  // 管理員一鍵結算當天未報到者（僅累計缺席次數，不設定停權日期）
+  // 管理員一鍵結算當天未報到者
   const handleSettleNoShow = async () => {
     if (!confirm(`確定要結算【${activeDate}】場次的未報到名單嗎？未報到的正取球友將會被記錄缺席 1 次。`)) return;
 
@@ -283,21 +301,32 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 球友掃碼自助報到區 */}
+        {/* 球友掃碼自助報到區 (含密碼認證) */}
         {isSelfCheckIn ? (
           <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-6 rounded-3xl shadow-lg text-center space-y-4">
-            <div className="text-2xl font-black text-[#0ca678]">📍 請選擇你的暱稱完成現場報到</div>
+            <div className="text-2xl font-black text-[#0ca678]">📍 請選擇暱稱並輸入報名密碼</div>
             <p className="text-sm text-slate-500 font-bold">⏰ 報到開放時間：18:30 ~ 21:00</p>
+            
             <select className="w-full p-4 bg-white rounded-2xl text-xl font-bold border-2 border-[#63e6be] focus:outline-none" value={checkInName} onChange={e => setCheckInName(e.target.value)}>
-              <option value="">-- 請選擇球友暱稱 --</option>
+              <option value="">-- 請選擇你的暱稱 --</option>
               {mainList.map(item => (
                 <option key={item.id} value={item.name} disabled={item.arrived}>
                   {item.name} ({item.count}位) {item.arrived ? ' ✓ [已報到]' : ''}
                 </option>
               ))}
             </select>
+
+            <input 
+              type="password" 
+              maxLength={4} 
+              placeholder="請輸入報名時設定的 4 位數密碼" 
+              className="w-full p-4 bg-white rounded-2xl text-xl text-center border-2 border-[#63e6be] focus:outline-none tracking-widest"
+              value={checkInPassword}
+              onChange={e => setCheckInPassword(e.target.value)}
+            />
+
             <button className="w-full bg-[#0ca678] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#099268] shadow-md" onClick={handleCheckInSubmit}>
-              確認報到
+              驗證密碼並確認報到
             </button>
           </div>
         ) : (
