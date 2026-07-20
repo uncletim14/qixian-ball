@@ -55,6 +55,8 @@ export default function Home() {
   const [selectedType, setSelectedType] = useState('normal'); 
   const [list, setList] = useState([]);
   const [isCheckInMode, setIsCheckInMode] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [isSelfCheckIn, setIsSelfCheckIn] = useState(false);
   
   const [adminPin, setAdminPin] = useState('');
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -62,8 +64,18 @@ export default function Home() {
 
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
   const [checkInName, setCheckInName] = useState('');
+  const [userWarning, setUserWarning] = useState(''); 
 
-  // 神祕入口（點擊「球」字 3 下）
+  // 檢查是否為掃碼進來的模式 (?mode=checkin)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'checkin') {
+        setIsSelfCheckIn(true);
+      }
+    }
+  }, []);
+
   const handleSecretClick = () => {
     const newCount = clickCount + 1;
     if (newCount >= 3) {
@@ -75,7 +87,6 @@ export default function Home() {
     }
   };
 
-  // 🎯 核心固定邏輯：三天（一、五、六）皆「只開新手區 (限額8人)」，「新手體驗」全面關閉
   const isAvailable = selectedType === 'normal';
   const maxSeatsLimit = 8;
 
@@ -88,7 +99,6 @@ export default function Home() {
   const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  // 切換日期時預設切換至新手區
   useEffect(() => {
     setSelectedType('normal');
   }, [selectedDay]);
@@ -99,7 +109,6 @@ export default function Home() {
     setCheckInName('');
   }, [isCheckInMode]);
 
-  // 修正 React Hook ESLint 警告
   useEffect(() => {
     const numericCount = parseInt(form.count);
     if (selectedType === 'normal' && numericCount > 2) {
@@ -107,6 +116,27 @@ export default function Home() {
     }
     setCheckInName('');
   }, [selectedType, form.count]);
+
+  // 當球友輸入暱稱時，即時查詢並顯示警示提醒（純警示、不阻擋）
+  useEffect(() => {
+    const trimmedName = form.name.trim();
+    if (!trimmedName) {
+      setUserWarning('');
+      return;
+    }
+
+    const checkUserViolation = async () => {
+      const { data } = await supabase.from('pickleball_blacklists').select('*').eq('name', trimmedName).single();
+      if (data && data.no_show_count > 0) {
+        setUserWarning(`⚠️ 提醒：暱稱【${trimmedName}】目前已有 ${data.no_show_count} 次未報到紀錄，請報名後務必準時出席喔！`);
+      } else {
+        setUserWarning('');
+      }
+    };
+
+    const timer = setTimeout(checkUserViolation, 500);
+    return () => clearTimeout(timer);
+  }, [form.name]);
 
   // 讀取報名資料
   useEffect(() => { 
@@ -140,6 +170,7 @@ export default function Home() {
     else { alert('❌ 管理員暗號錯誤！'); setAdminPin(''); }
   };
 
+  // 報名提交（只跳提示，完全不阻擋報名）
   const submit = async () => {
     if (!isAvailable) { alert('本分區本週無開放報名喔！'); return; }
     const now = new Date();
@@ -159,16 +190,59 @@ export default function Home() {
 
     const { error } = await supabase.from('pickleball_registrations').insert([{ name: trimmedName, count: numericCount, password: form.password, session_id: currentSessionId, created_at: new Date().toISOString(), arrived: false }]);
     if (error) alert('報名失敗：' + error.message);
-    else { alert('登記成功！'); setForm({ name: '', count: '1', password: '' }); refreshData(); }
+    else { 
+      alert('登記成功！'); 
+      setForm({ name: '', count: '1', password: '' }); 
+      setUserWarning('');
+      refreshData(); 
+    }
   };
 
+  // 報到提交（限制 18:30 ~ 21:00）
   const handleCheckInSubmit = async () => {
-    if (!checkInName) { alert('請選擇球友暱稱！'); return; }
+    if (!checkInName) { alert('請選擇你的暱稱！'); return; }
+
+    if (isSelfCheckIn) {
+      const now = new Date();
+      const timeVal = now.getHours() * 100 + now.getMinutes();
+      if (timeVal < 1830 || timeVal > 2100) {
+        alert('🚫 目前非報到時間！現場開放報到時間為 18:30 ~ 21:00。');
+        return;
+      }
+    }
+
     const targetItem = list.find(item => item.name === checkInName);
     if (!targetItem) return;
     const { error } = await supabase.from('pickleball_registrations').update({ arrived: true }).eq('id', targetItem.id);
     if (error) alert('系統錯誤：' + error.message);
-    else { alert(`🎉 成功幫【${checkInName}】點名！`); setCheckInName(''); refreshData(); }
+    else { 
+      alert(`🎉 成功幫【${checkInName}】完成現場報到！`); 
+      setCheckInName(''); 
+      refreshData(); 
+    }
+  };
+
+  // 管理員一鍵結算當天未報到者（僅累計缺席次數，不設定停權日期）
+  const handleSettleNoShow = async () => {
+    if (!confirm(`確定要結算【${activeDate}】場次的未報到名單嗎？未報到的正取球友將會被記錄缺席 1 次。`)) return;
+
+    const noShowList = mainList.filter(item => !item.arrived);
+    if (noShowList.length === 0) {
+      alert('🎉 太棒了！今天所有正取球友皆已完成報到，無人缺席！');
+      return;
+    }
+
+    for (const item of noShowList) {
+      const { data: existing } = await supabase.from('pickleball_blacklists').select('*').eq('name', item.name).single();
+      let newCount = (existing?.no_show_count || 0) + 1;
+
+      await supabase.from('pickleball_blacklists').upsert({
+        name: item.name,
+        no_show_count: newCount
+      }, { onConflict: 'name' });
+    }
+
+    alert(`✅ 結算完成！已為 ${noShowList.length} 位未報到球友累記缺席次數。`);
   };
 
   const handleDelete = async (item) => {
@@ -179,6 +253,9 @@ export default function Home() {
     else { alert('取消成功！'); refreshData(); }
   };
 
+  const currentUrl = typeof window !== 'undefined' ? `${window.location.origin}?mode=checkin` : '';
+  const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(currentUrl)}`;
+
   return (
     <main className="min-h-screen bg-[#f0f4f8] text-[#2d3748] p-4 sm:p-8">
       <div className="max-w-2xl mx-auto space-y-6 sm:space-y-10 py-2 sm:py-6">
@@ -186,76 +263,114 @@ export default function Home() {
         <div className="h-4"></div>
 
         {/* 大標題 */}
-        <div className={`text-center p-6 sm:p-12 rounded-3xl shadow-md border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
-          <h1 className={`text-3xl sm:text-6xl font-black tracking-wider leading-tight select-none ${isCheckInMode ? 'text-[#d94800]' : 'text-[#0070C0]'}`}>
+        <div className={`text-center p-6 sm:p-12 rounded-3xl shadow-md border transition-all ${isSelfCheckIn ? 'bg-[#e6fcf5] border-[#63e6be]' : isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
+          <h1 className={`text-3xl sm:text-6xl font-black tracking-wider leading-tight select-none ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#0070C0]'}`}>
             七賢國小匹克
             <span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">球</span>
           </h1>
-          <p className={`text-lg sm:text-2xl font-black tracking-widest border-t pt-3 mt-4 sm:mt-6 ${isCheckInMode ? 'text-[#d94800] border-[#ffd8a8]' : 'text-[#0070C0] border-[#b6d7a8]'}`}>
-            {isCheckInMode ? '📱 管理員現場點名主控台 (按「球」字可退出)' : '新手區限額報名（體驗暫停）'}
+          <p className={`text-lg sm:text-2xl font-black tracking-widest border-t pt-3 mt-4 sm:mt-6 ${isSelfCheckIn ? 'text-[#0ca678] border-[#63e6be]' : isCheckInMode ? 'text-[#d94800] border-[#ffd8a8]' : 'text-[#0070C0] border-[#b6d7a8]'}`}>
+            {isSelfCheckIn ? '📱 現場自助報到專區 (限 18:30 - 21:00)' : isCheckInMode ? '📱 管理員現場點名主控台' : '新手區限額報名（體驗暫停）'}
           </p>
         </div>
 
         {/* 日期選擇 */}
         <div className="grid grid-cols-3 gap-3 sm:gap-6">
           {DAYS.map(d => (
-            <button key={d.id} onClick={() => setSelectedDay(d.id)} className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 flex flex-col items-center justify-center gap-1 shadow-sm border-2 ${selectedDay === d.id ? (isCheckInMode ? 'bg-[#ff6d00] border-[#ff6d00] text-white' : 'bg-[#0070C0] border-[#0070C0] text-white scale-105') : 'bg-white text-[#4a5568] hover:bg-slate-50 border-white'}`}>
+            <button key={d.id} onClick={() => setSelectedDay(d.id)} className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 flex flex-col items-center justify-center gap-1 shadow-sm border-2 ${selectedDay === d.id ? (isSelfCheckIn ? 'bg-[#0ca678] border-[#0ca678] text-white' : isCheckInMode ? 'bg-[#ff6d00] border-[#ff6d00] text-white' : 'bg-[#0070C0] border-[#0070C0] text-white scale-105') : 'bg-white text-[#4a5568] hover:bg-slate-50 border-white'}`}>
               <span className="text-lg sm:text-2xl">{d.label}</span>
               <span className={`text-xl sm:text-3xl font-black tracking-tighter ${selectedDay === d.id ? 'text-[#ffe082]' : 'text-[#ff6d00]'}`}>{d.dateStr}</span>
             </button>
           ))}
         </div>
 
-        {/* 組別選擇 */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-6">
-          {TYPES.map(t => (
-            <button key={t.id} onClick={() => setSelectedType(t.id)} className={`p-4 sm:p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${selectedType === t.id ? 'bg-[#D9EAD3] text-[#0070C0] border-[#0070C0]' : 'bg-white text-[#718096] border-transparent hover:text-[#0070C0]'}`}>
-              <span className="text-xl sm:text-3xl">{t.label}</span>
-              {!isCheckInMode && <span className={`text-base sm:text-xl ${t.note === '本週無開放' ? 'text-red-500 font-bold' : 'text-[#0070C0]'}`}>({t.note})</span>}
+        {/* 球友掃碼自助報到區 */}
+        {isSelfCheckIn ? (
+          <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-6 rounded-3xl shadow-lg text-center space-y-4">
+            <div className="text-2xl font-black text-[#0ca678]">📍 請選擇你的暱稱完成現場報到</div>
+            <p className="text-sm text-slate-500 font-bold">⏰ 報到開放時間：18:30 ~ 21:00</p>
+            <select className="w-full p-4 bg-white rounded-2xl text-xl font-bold border-2 border-[#63e6be] focus:outline-none" value={checkInName} onChange={e => setCheckInName(e.target.value)}>
+              <option value="">-- 請選擇球友暱稱 --</option>
+              {mainList.map(item => (
+                <option key={item.id} value={item.name} disabled={item.arrived}>
+                  {item.name} ({item.count}位) {item.arrived ? ' ✓ [已報到]' : ''}
+                </option>
+              ))}
+            </select>
+            <button className="w-full bg-[#0ca678] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#099268] shadow-md" onClick={handleCheckInSubmit}>
+              確認報到
             </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <>
+            {/* 組別選擇 */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-6">
+              {TYPES.map(t => (
+                <button key={t.id} onClick={() => setSelectedType(t.id)} className={`p-4 sm:p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${selectedType === t.id ? 'bg-[#D9EAD3] text-[#0070C0] border-[#0070C0]' : 'bg-white text-[#718096] border-transparent hover:text-[#0070C0]'}`}>
+                  <span className="text-xl sm:text-3xl">{t.label}</span>
+                  {!isCheckInMode && <span className={`text-base sm:text-xl ${t.note === '本週無開放' ? 'text-red-500 font-bold' : 'text-[#0070C0]'}`}>({t.note})</span>}
+                </button>
+              ))}
+            </div>
 
-        {/* 看板 */}
-        <div className="bg-white border border-[#0070C0]/20 rounded-2xl p-4 sm:p-6 text-center space-y-1 shadow-sm">
-          <div className="text-2xl sm:text-4xl font-black text-[#0070C0] tracking-wide">⏰ 時間：19:00 - 21:20</div>
-          <div className="text-sm sm:text-base text-red-500 font-bold">⚠️ 當天 18:30 後即截止報名</div>
-        </div>
+            {/* 看板 */}
+            <div className="bg-white border border-[#0070C0]/20 rounded-2xl p-4 sm:p-6 text-center space-y-1 shadow-sm">
+              <div className="text-2xl sm:text-4xl font-black text-[#0070C0] tracking-wide">⏰ 時間：19:00 - 21:20</div>
+              <div className="text-sm sm:text-base text-red-500 font-bold">⚠️ 當天 18:30 後即截止報名</div>
+            </div>
 
-        {/* 表單 / 點名區 */}
-        <div className={`p-5 sm:p-8 rounded-3xl shadow-xl border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
-          {isCheckInMode ? (
-            !isAdminAuthenticated ? (
-              <div className="space-y-4 text-center">
-                <div className="text-xl sm:text-2xl font-black text-[#d94800]">🔒 請輸入管理員專用暗號</div>
-                <input className="w-full p-4 bg-white rounded-2xl border-2 text-center text-2xl tracking-widest focus:outline-none focus:border-[#ff6d00]" type="password" placeholder="請輸入 4 位暗號" value={adminPin} onChange={e => setAdminPin(e.target.value)} />
-                <button className="w-full bg-[#ff6d00] text-white p-4 rounded-2xl text-xl font-black" onClick={verifyAdminPin}>解除鎖定</button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="text-xl sm:text-2xl font-black text-[#d94800] text-center">📋 現場快速點名區</div>
-                <select className="w-full p-4 bg-white rounded-2xl text-xl" value={checkInName} onChange={e => setCheckInName(e.target.value)}>
-                  <option value="">-- 請選擇到場球友的暱稱 --</option>
-                  {list.map(item => (<option key={item.id} value={item.name} disabled={item.arrived}>{item.name} ({item.count}位) {item.arrived ? ' [已報到]' : ''}</option>))}
-                </select>
-                <button className="w-full bg-green-600 text-white p-4 rounded-2xl text-xl font-black hover:bg-green-700" onClick={handleCheckInSubmit}>確認到場（直接點名）</button>
-              </div>
-            )
-          ) : (
-            isAvailable ? (
-              <div className="space-y-4">
-                <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
-                  <option value="1">1 位</option> <option value="2">2 位</option>
-                </select>
-                <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" type="password" placeholder="取消密碼 (4位數字)" maxLength={4} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-                <button className="w-full bg-[#0070C0] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
-              </div>
-            ) : (
-              <div className="text-center py-6 font-bold text-red-600">本分區本週暫無開放報名喔！</div>
-            )
-          )}
-        </div>
+            {/* 表單 / 點名區 */}
+            <div className={`p-5 sm:p-8 rounded-3xl shadow-xl border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
+              {isCheckInMode ? (
+                !isAdminAuthenticated ? (
+                  <div className="space-y-4 text-center">
+                    <div className="text-xl sm:text-2xl font-black text-[#d94800]">🔒 請輸入管理員專用暗號</div>
+                    <input className="w-full p-4 bg-white rounded-2xl border-2 text-center text-2xl tracking-widest focus:outline-none focus:border-[#ff6d00]" type="password" placeholder="請輸入 4 位暗號" value={adminPin} onChange={e => setAdminPin(e.target.value)} />
+                    <button className="w-full bg-[#ff6d00] text-white p-4 rounded-2xl text-xl font-black" onClick={verifyAdminPin}>解除鎖定</button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="text-xl sm:text-2xl font-black text-[#d94800] text-center">📋 現場點名與管理主控台</div>
+                    
+                    <button className="w-full bg-[#3b5998] text-white p-3 rounded-2xl font-bold text-lg shadow hover:bg-[#2d4373]" onClick={() => setShowQrModal(true)}>
+                      📷 顯示現場報到用 QR Code
+                    </button>
+
+                    <button className="w-full bg-red-600 text-white p-3 rounded-2xl font-bold text-lg shadow hover:bg-red-700" onClick={handleSettleNoShow}>
+                      ⚠️ 結算今天未報到者（僅紀錄缺席）
+                    </button>
+
+                    <select className="w-full p-4 bg-white rounded-2xl text-xl mt-2" value={checkInName} onChange={e => setCheckInName(e.target.value)}>
+                      <option value="">-- 請選擇到場球友的暱稱 --</option>
+                      {list.map(item => (<option key={item.id} value={item.name} disabled={item.arrived}>{item.name} ({item.count}位) {item.arrived ? ' [已報到]' : ''}</option>))}
+                    </select>
+                    <button className="w-full bg-green-600 text-white p-4 rounded-2xl text-xl font-black hover:bg-green-700" onClick={handleCheckInSubmit}>確認到場（手動點名）</button>
+                  </div>
+                )
+              ) : (
+                isAvailable ? (
+                  <div className="space-y-4">
+                    <div>
+                      <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                      {/* 溫馨提醒提示區 */}
+                      {userWarning && (
+                        <div className="mt-2 text-sm font-bold text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 shadow-sm">
+                          {userWarning}
+                        </div>
+                      )}
+                    </div>
+                    <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
+                      <option value="1">1 位</option> <option value="2">2 位</option>
+                    </select>
+                    <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" type="password" placeholder="取消密碼 (4位數字)" maxLength={4} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+                    <button className="w-full bg-[#0070C0] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 font-bold text-red-600">本分區本週暫無開放報名喔！</div>
+                )
+              )}
+            </div>
+          </>
+        )}
 
         {/* 正取名單 */}
         <div className="space-y-4">
@@ -293,6 +408,22 @@ export default function Home() {
         )}
 
       </div>
+
+      {/* 彈出視窗：顯示報到 QR Code (管理員用) */}
+      {showQrModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 sm:p-8 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <h3 className="text-2xl font-black text-[#0070C0]">請球友掃描 QR Code 報到</h3>
+            <p className="text-slate-500 text-sm">開放時間：18:30 - 21:00</p>
+            <div className="flex justify-center p-2 bg-slate-50 rounded-2xl border">
+              <img src={qrCodeImageUrl} alt="報到 QR Code" className="w-60 h-60" />
+            </div>
+            <button className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold hover:bg-slate-900" onClick={() => setShowQrModal(false)}>
+              關閉視窗
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
