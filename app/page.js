@@ -151,20 +151,24 @@ export default function Home() {
     load(); 
   }, [currentSessionId]);
 
-  // 核心計算：區分正取與遞補
+  // 🎯 備取成功邏輯算式
   let currentTotal = 0;
+  let originalSeatsSum = 0;
   const mainList = [];
   const waitList = [];
 
-  list.forEach((item, index) => {
+  list.forEach((item) => {
     const seats = Number(item.count) || 0;
+    
     if (currentTotal + seats <= maxSeatsLimit) { 
-      const isPromoted = index > 0 && (currentTotal > 0 || index >= maxSeatsLimit);
+      const isPromoted = originalSeatsSum >= maxSeatsLimit;
       mainList.push({ ...item, isPromoted }); 
       currentTotal += seats; 
     } else { 
       waitList.push(item); 
     }
+
+    originalSeatsSum += seats;
   });
 
   const hasPromotedSeats = mainList.some(item => item.isPromoted);
@@ -317,7 +321,7 @@ export default function Home() {
                   </span>
                 </div>
 
-                {/* 🔴 網站更新提示（已修正文字）🔴 */}
+                {/* 🔴 網站更新提示 🔴 */}
                 <p className="text-red-600 text-sm sm:text-lg font-black tracking-wider pt-1 flex items-center justify-center gap-1">
                   <span>⏰</span> 網站報名每週六晚上 10 點更新
                 </p>
@@ -346,7 +350,7 @@ export default function Home() {
               <option value="">-- 請選擇你的暱稱 --</option>
               {mainList.map(item => (
                 <option key={item.id} value={item.name} disabled={item.arrived}>
-                  {item.name} ({item.count}位) {item.isPromoted ? ' [🎉遞補正取]' : ''} {item.arrived ? ' ✓ [已報到]' : ''}
+                  {item.name} ({item.count}位) {item.isPromoted ? ' [🎉備取成功]' : ''} {item.arrived ? ' ✓ [已報到]' : ''}
                 </option>
               ))}
             </select>
@@ -442,7 +446,7 @@ export default function Home() {
           {hasPromotedSeats && (
             <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-4 rounded-2xl text-[#0ca678] font-bold text-sm sm:text-base flex items-center gap-2 shadow-sm animate-pulse">
               <span>🎉</span>
-              <span><strong>遞補成功通知：</strong>有球友取消報名，備取球友已自動遞補升至正取！請留意您的席位。</span>
+              <span><strong>備取成功通知：</strong>有球友取消報名，備取球友已自動遞補升至正取！請留意您的席位。</span>
             </div>
           )}
 
@@ -454,7 +458,7 @@ export default function Home() {
                 <div key={item.id} className={`p-4 sm:p-6 rounded-2xl flex justify-between items-center shadow-sm border ${item.arrived ? 'bg-green-100 border-green-300' : item.isPromoted ? 'bg-[#e6fcf5] border-[#63e6be]' : 'bg-white border-slate-100'}`}>
                   <span className="text-xl sm:text-3xl font-bold flex items-center flex-wrap gap-2">
                     {item.arrived && <span className="text-green-600">✓ [已報到]</span>}
-                    {item.isPromoted && !item.arrived && <span className="bg-[#0ca678] text-white text-xs sm:text-sm px-2.5 py-1 rounded-full font-bold">🎉 遞補成功</span>}
+                    {item.isPromoted && !item.arrived && <span className="bg-[#0ca678] text-white text-xs sm:text-sm px-2.5 py-1 rounded-full font-bold">🎉 備取成功</span>}
                     {item.name} <span className="text-sm font-normal text-slate-400">({item.count}位)</span>
                   </span>
                   <button className="text-red-500 text-sm font-bold bg-red-50 px-3 py-1.5 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
