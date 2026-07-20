@@ -159,7 +159,6 @@ export default function Home() {
   list.forEach((item, index) => {
     const seats = Number(item.count) || 0;
     if (currentTotal + seats <= maxSeatsLimit) { 
-      // 如果不是最初前幾個報名的，但卻在正取名單內，代表他是「遞補正取」
       const isPromoted = index > 0 && (currentTotal > 0 || index >= maxSeatsLimit);
       mainList.push({ ...item, isPromoted }); 
       currentTotal += seats; 
@@ -293,9 +292,27 @@ export default function Home() {
             七賢國小匹克
             <span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">球</span>
           </h1>
-          <p className={`text-lg sm:text-2xl font-black tracking-widest border-t pt-3 mt-4 sm:mt-6 ${isSelfCheckIn ? 'text-[#0ca678] border-[#63e6be]' : isCheckInMode ? 'text-[#d94800] border-[#ffd8a8]' : 'text-[#0070C0] border-[#b6d7a8]'}`}>
-            {isSelfCheckIn ? '📱 現場自助報到專區 (限 18:30 - 21:00)' : isCheckInMode ? '📱 管理員現場點名主控台' : '新手區限額報名（體驗暫停）'}
-          </p>
+          
+          <div className={`border-t pt-3 mt-4 sm:mt-6 space-y-1 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#b6d7a8]'}`}>
+            {isSelfCheckIn ? (
+              <p className="text-[#0ca678] text-sm sm:text-xl font-extrabold tracking-wide">
+                📱 現場自助報到專區 (限 18:30 - 21:00)
+              </p>
+            ) : isCheckInMode ? (
+              <p className="text-[#d94800] text-sm sm:text-xl font-extrabold tracking-wide">
+                📱 管理員現場點名主控台
+              </p>
+            ) : (
+              <>
+                <p className="text-[#0070C0] text-sm sm:text-xl font-extrabold tracking-wide">
+                  新手單次100 / 租借球拍50 / 新手體驗免費
+                </p>
+                <p className="text-[#0070C0] text-xs sm:text-lg font-bold tracking-wider opacity-90">
+                  網站報名每週六晚上10點更新
+                </p>
+              </>
+            )}
+          </div>
         </div>
 
         {/* 日期選擇 */}
@@ -411,7 +428,6 @@ export default function Home() {
         <div className="space-y-4">
           <h2 className="text-2xl sm:text-4xl font-black text-[#0070C0] px-2">正取名單 ({currentTotal} / {maxSeatsLimit})</h2>
           
-          {/* 📢 遞補提示卡片 (In-App Notice) */}
           {hasPromotedSeats && (
             <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-4 rounded-2xl text-[#0ca678] font-bold text-sm sm:text-base flex items-center gap-2 shadow-sm animate-pulse">
               <span>🎉</span>
