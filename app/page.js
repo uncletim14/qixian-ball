@@ -75,7 +75,7 @@ export default function Home() {
     }
   };
 
-  // ✨ 核心開放邏輯：只有 selectedType 為 'normal' (新手區) 才開放，體驗區一律不開放
+  // 🎯 核心固定邏輯：三天（一、五、六）皆「只開新手區 (限額8人)」，「新手體驗」全面關閉
   const isAvailable = selectedType === 'normal';
   const maxSeatsLimit = 8;
 
@@ -88,7 +88,7 @@ export default function Home() {
   const activeDate = activeDayConfig ? activeDayConfig.dateStr : '';
   const currentSessionId = `${activeDate}_${selectedType}`;
 
-  // 強制切換日期時指到「新手區」
+  // 切換日期時預設切換至新手區
   useEffect(() => {
     setSelectedType('normal');
   }, [selectedDay]);
@@ -99,13 +99,14 @@ export default function Home() {
     setCheckInName('');
   }, [isCheckInMode]);
 
+  // 修正 React Hook ESLint 警告
   useEffect(() => {
     const numericCount = parseInt(form.count);
     if (selectedType === 'normal' && numericCount > 2) {
       setForm(prev => ({ ...prev, count: '1' }));
     }
     setCheckInName('');
-  }, [selectedType]);
+  }, [selectedType, form.count]);
 
   // 讀取報名資料
   useEffect(() => { 
