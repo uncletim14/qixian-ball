@@ -64,7 +64,7 @@ export default function Home() {
 
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
   const [checkInName, setCheckInName] = useState('');
-  const [checkInPassword, setCheckInPassword] = useState(''); // 新增：自助報到密碼狀態
+  const [checkInPassword, setCheckInPassword] = useState(''); 
   const [userWarning, setUserWarning] = useState(''); 
 
   // 檢查是否為掃碼進來的模式 (?mode=checkin)
@@ -141,7 +141,7 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [form.name]);
 
-  // 讀取報名資料 (包含 password 欄位以利驗證)
+  // 讀取報名資料
   useEffect(() => { 
     if (!currentSessionId) return;
     const load = async () => {
@@ -151,15 +151,24 @@ export default function Home() {
     load(); 
   }, [currentSessionId]);
 
+  // 核心計算：區分正取與遞補
   let currentTotal = 0;
   const mainList = [];
   const waitList = [];
-  list.forEach(item => {
+
+  list.forEach((item, index) => {
     const seats = Number(item.count) || 0;
-    if (currentTotal + seats <= maxSeatsLimit) { mainList.push(item); currentTotal += seats; }
-    else { waitList.push(item); }
+    if (currentTotal + seats <= maxSeatsLimit) { 
+      // 如果不是最初前幾個報名的，但卻在正取名單內，代表他是「遞補正取」
+      const isPromoted = index > 0 && (currentTotal > 0 || index >= maxSeatsLimit);
+      mainList.push({ ...item, isPromoted }); 
+      currentTotal += seats; 
+    } else { 
+      waitList.push(item); 
+    }
   });
 
+  const hasPromotedSeats = mainList.some(item => item.isPromoted);
   const totalWaitCount = waitList.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
 
   const refreshData = async () => {
@@ -201,11 +210,10 @@ export default function Home() {
     }
   };
 
-  // 報到提交（包含密碼核對與時間限制）
+  // 報到提交
   const handleCheckInSubmit = async () => {
     if (!checkInName) { alert('請選擇你的暱稱！'); return; }
 
-    // 管理員手動點名不需要密碼，球友自助報到才需要密碼與時間驗證
     if (isSelfCheckIn) {
       const now = new Date();
       const timeVal = now.getHours() * 100 + now.getMinutes();
@@ -223,7 +231,6 @@ export default function Home() {
     const targetItem = list.find(item => item.name === checkInName);
     if (!targetItem) return;
 
-    // 球友自助報到時核對密碼
     if (isSelfCheckIn && targetItem.password !== checkInPassword) {
       alert('❌ 密碼錯誤！請輸入報名時設定的 4 位數密碼。');
       setCheckInPassword('');
@@ -301,7 +308,7 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 球友掃碼自助報到區 (含密碼認證) */}
+        {/* 球友掃碼自助報到區 */}
         {isSelfCheckIn ? (
           <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-6 rounded-3xl shadow-lg text-center space-y-4">
             <div className="text-2xl font-black text-[#0ca678]">📍 請選擇暱稱並輸入報名密碼</div>
@@ -311,7 +318,7 @@ export default function Home() {
               <option value="">-- 請選擇你的暱稱 --</option>
               {mainList.map(item => (
                 <option key={item.id} value={item.name} disabled={item.arrived}>
-                  {item.name} ({item.count}位) {item.arrived ? ' ✓ [已報到]' : ''}
+                  {item.name} ({item.count}位) {item.isPromoted ? ' [🎉遞補正取]' : ''} {item.arrived ? ' ✓ [已報到]' : ''}
                 </option>
               ))}
             </select>
@@ -380,7 +387,6 @@ export default function Home() {
                   <div className="space-y-4">
                     <div>
                       <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                      {/* 溫馨提醒提示區 */}
                       {userWarning && (
                         <div className="mt-2 text-sm font-bold text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 shadow-sm">
                           {userWarning}
@@ -401,17 +407,27 @@ export default function Home() {
           </>
         )}
 
-        {/* 正取名單 */}
+        {/* 正取名單區塊 */}
         <div className="space-y-4">
           <h2 className="text-2xl sm:text-4xl font-black text-[#0070C0] px-2">正取名單 ({currentTotal} / {maxSeatsLimit})</h2>
+          
+          {/* 📢 遞補提示卡片 (In-App Notice) */}
+          {hasPromotedSeats && (
+            <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-4 rounded-2xl text-[#0ca678] font-bold text-sm sm:text-base flex items-center gap-2 shadow-sm animate-pulse">
+              <span>🎉</span>
+              <span><strong>遞補成功通知：</strong>有球友取消報名，備取球友已自動遞補升至正取！請留意您的席位。</span>
+            </div>
+          )}
+
           {mainList.length === 0 ? (
             <div className="text-center py-8 text-slate-400 bg-white rounded-2xl">暫無報名</div>
           ) : (
             <div className="space-y-3">
               {mainList.map((item) => (
-                <div key={item.id} className={`p-4 sm:p-6 rounded-2xl flex justify-between items-center shadow-sm border ${item.arrived ? 'bg-green-100 border-green-300' : 'bg-white border-slate-100'}`}>
-                  <span className="text-xl sm:text-3xl font-bold">
-                    {item.arrived && <span className="text-green-600 mr-2">✓ [已報到]</span>}
+                <div key={item.id} className={`p-4 sm:p-6 rounded-2xl flex justify-between items-center shadow-sm border ${item.arrived ? 'bg-green-100 border-green-300' : item.isPromoted ? 'bg-[#e6fcf5] border-[#63e6be]' : 'bg-white border-slate-100'}`}>
+                  <span className="text-xl sm:text-3xl font-bold flex items-center flex-wrap gap-2">
+                    {item.arrived && <span className="text-green-600">✓ [已報到]</span>}
+                    {item.isPromoted && !item.arrived && <span className="bg-[#0ca678] text-white text-xs sm:text-sm px-2.5 py-1 rounded-full font-bold">🎉 遞補成功</span>}
                     {item.name} <span className="text-sm font-normal text-slate-400">({item.count}位)</span>
                   </span>
                   <button className="text-red-500 text-sm font-bold bg-red-50 px-3 py-1.5 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
