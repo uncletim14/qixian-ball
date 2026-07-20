@@ -151,7 +151,7 @@ export default function Home() {
     load(); 
   }, [currentSessionId]);
 
-  // 🎯 備取成功邏輯算式
+  // 🎯 備取成功邏輯算式 (依時間序列，第 9 人頭含以上進正取才算備取成功)
   let currentTotal = 0;
   let originalSeatsSum = 0;
   const mainList = [];
@@ -294,7 +294,7 @@ export default function Home() {
         <div className={`text-center p-6 sm:p-10 rounded-3xl shadow-lg border-2 transition-all ${isSelfCheckIn ? 'bg-[#e6fcf5] border-[#63e6be]' : isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
           
           <h1 className={`text-3xl sm:text-5xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#0070C0]'}`}>
-            七賢國小新手交流<span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">團</span>
+            七賢匹克新手交流<span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">團</span>
           </h1>
 
           <div className={`border-t-2 border-dashed pt-4 mt-4 sm:mt-6 space-y-3 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#b6d7a8]'}`}>
