@@ -88,12 +88,21 @@ export default function Home() {
     }
   };
 
-  const isAvailable = selectedType === 'normal';
-  const maxSeatsLimit = 8;
+  // 🎯 設定各場次與組別的開放狀況與上限人數
+  const isAvailable = selectedType === 'normal' || (selectedDay === 'sat' && selectedType === 'experience');
+  const maxSeatsLimit = (selectedDay === 'sat' && selectedType === 'experience') ? 9 : 8;
 
   const TYPES = [
-    { id: 'experience', label: '新手體驗', note: '本週無開放' },
-    { id: 'normal', label: '新手區', note: '開放報名' }
+    { 
+      id: 'experience', 
+      label: '新手體驗', 
+      note: selectedDay === 'sat' ? '開放報名(限9位)' : '本週無開放' 
+    },
+    { 
+      id: 'normal', 
+      label: '新手區', 
+      note: '開放報名(限8位)' 
+    }
   ];
 
   const activeDayConfig = DAYS.find(d => d.id === selectedDay);
@@ -101,8 +110,8 @@ export default function Home() {
   const currentSessionId = `${activeDate}_${selectedType}`;
 
   useEffect(() => {
-    setSelectedType('normal');
-  }, [selectedDay]);
+    setForm(prev => ({ ...prev, count: '1' }));
+  }, [selectedDay, selectedType]);
 
   useEffect(() => {
     setAdminPin('');
@@ -112,10 +121,6 @@ export default function Home() {
   }, [isCheckInMode]);
 
   useEffect(() => {
-    const numericCount = parseInt(form.count);
-    if (selectedType === 'normal' && numericCount > 2) {
-      setForm(prev => ({ ...prev, count: '1' }));
-    }
     setCheckInName('');
     setCheckInPassword('');
   }, [selectedType, form.count]);
@@ -151,7 +156,7 @@ export default function Home() {
     load(); 
   }, [currentSessionId]);
 
-  // 🎯 備取成功邏輯算式 (依時間序列，第 9 人頭含以上進正取才算備取成功)
+  // 備取成功邏輯算式
   let currentTotal = 0;
   let originalSeatsSum = 0;
   const mainList = [];
@@ -197,7 +202,16 @@ export default function Home() {
     if (activeDate === todayStr && currentTimeValue >= 1830) { alert('🚫 抱歉！今天的報名已於 18:30 截止囉！'); return; }
     
     const numericCount = parseInt(form.count);
-    if (numericCount < 1 || numericCount > 2) { alert('🚫 新手區單筆報名最多 2 位球友喔！'); return; }
+    
+    // 限制單筆報名人數：體驗區單筆 1 位，新手區單筆最多 2 位
+    if (selectedType === 'experience' && numericCount > 1) {
+      alert('🚫 新手體驗區單筆報名僅限 1 位喔！');
+      return;
+    }
+    if (selectedType === 'normal' && (numericCount < 1 || numericCount > 2)) {
+      alert('🚫 新手區單筆報名最多 2 位球友喔！');
+      return;
+    }
 
     const trimmedName = form.name.trim();
     if (!trimmedName || form.password.length !== 4) { alert('請輸入暱稱與 4 位密碼'); return; }
@@ -375,7 +389,11 @@ export default function Home() {
               {TYPES.map(t => (
                 <button key={t.id} onClick={() => setSelectedType(t.id)} className={`p-4 sm:p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${selectedType === t.id ? 'bg-[#D9EAD3] text-[#0070C0] border-[#0070C0]' : 'bg-white text-[#718096] border-transparent hover:text-[#0070C0]'}`}>
                   <span className="text-xl sm:text-3xl">{t.label}</span>
-                  {!isCheckInMode && <span className={`text-base sm:text-xl ${t.note === '本週無開放' ? 'text-red-500 font-bold' : 'text-[#0070C0]'}`}>({t.note})</span>}
+                  {!isCheckInMode && (
+                    <span className={`text-base sm:text-xl font-bold ${t.note === '本週無開放' ? 'text-red-500' : 'text-[#0070C0]'}`}>
+                      ({t.note})
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -426,7 +444,8 @@ export default function Home() {
                       )}
                     </div>
                     <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
-                      <option value="1">1 位</option> <option value="2">2 位</option>
+                      <option value="1">1 位</option>
+                      {selectedType === 'normal' && <option value="2">2 位</option>}
                     </select>
                     <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" type="password" placeholder="取消密碼 (4位數字)" maxLength={4} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
                     <button className="w-full bg-[#0070C0] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
