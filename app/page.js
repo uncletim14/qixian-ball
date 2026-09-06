@@ -69,6 +69,11 @@ export default function Home() {
   // 🆕 管理員模式：缺席/黑名單管理清單
   const [blacklistEntries, setBlacklistEntries] = useState([]);
 
+  // 🆕 管理員模式：全區名單（同時顯示三個分區的名單，不用切換分頁）
+  const [zoneLists, setZoneLists] = useState({ experience: [], normal: [], openplay: [] });
+  // 🆕 全區名單管理的分頁篩選（ALL / experience / normal / openplay）
+  const [adminCategoryFilter, setAdminCategoryFilter] = useState('ALL');
+
   // 檢查是否為掃碼進來的模式 (?mode=checkin)
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -232,6 +237,7 @@ export default function Home() {
       setIsAdminAuthenticated(true);
       fetchPendingList();
       fetchBlacklistEntries();
+      fetchAllZoneLists(); // 🆕
     } else {
       alert('❌ 管理員暗號錯誤！');
       setAdminPin('');
@@ -250,6 +256,60 @@ export default function Home() {
     setBlacklistEntries(data || []);
   };
 
+  // 🆕 依報名先後順序計算正取/備取（跟畫面上主要清單同一套邏輯，供全區名單使用）
+  const splitMainAndWaitList = (items, maxSeats) => {
+    let total = 0;
+    let seatsSum = 0;
+    const main = [];
+    const wait = [];
+    items.forEach((item) => {
+      const seats = Number(item.count) || 0;
+      if (total + seats <= maxSeats) {
+        main.push({ ...item, isPromoted: seatsSum >= maxSeats });
+        total += seats;
+      } else {
+        wait.push(item);
+      }
+      seatsSum += seats;
+    });
+    return { main, wait };
+  };
+
+  // 🆕 抓取三個分區的完整名單（管理員模式一次查看，不用切換分頁）
+  const fetchAllZoneLists = async () => {
+    const sessionIds = TYPE_ORDER.map(typeId => `${activeDate}_${typeId}`);
+    const { data } = await supabase
+      .from('pickleball_registrations')
+      .select('id, name, count, session_id, arrived, review_status')
+      .in('session_id', sessionIds)
+      .order('created_at', { ascending: true });
+
+    const grouped = { experience: [], normal: [], openplay: [] };
+    (data || []).forEach(item => {
+      const typeId = item.session_id.replace(`${activeDate}_`, '');
+      if (grouped[typeId]) grouped[typeId].push(item);
+    });
+    setZoneLists(grouped);
+  };
+
+  // 🆕 切換到場狀態（管理員用）
+  const handleToggleArrived = async (item) => {
+    const newStatus = !item.arrived;
+    const { error } = await supabase.from('pickleball_registrations').update({ arrived: newStatus }).eq('id', item.id);
+    if (error) {
+      alert(`更新到場狀態失敗：${error.message}`);
+      return;
+    }
+    fetchAllZoneLists();
+  };
+
+  // 🆕 幹部權限直接刪除報名（不需要球友的取消密碼）
+  const handleAdminDelete = async (item) => {
+    if (!confirm(`幹部權限：確定要刪除「${item.name}」的報名？`)) return;
+    await supabase.from('pickleball_registrations').delete().eq('id', item.id);
+    fetchAllZoneLists();
+  };
+
   // 🆕 核准報名：改為 approved，並加入白名單，之後報名都不用再審
   const handleApprovePending = async (item) => {
     const { error: updateError } = await supabase.from('pickleball_registrations').update({ review_status: 'approved' }).eq('id', item.id);
@@ -264,6 +324,7 @@ export default function Home() {
     alert(`✅ 已核准「${trimmedName}」，之後報名將不需再審核！`);
     fetchPendingList();
     refreshData();
+    fetchAllZoneLists(); // 🆕
   };
 
   // 🆕 拒絕報名：直接刪除該筆
@@ -273,6 +334,7 @@ export default function Home() {
     alert(`已拒絕並刪除「${item.name}」的報名`);
     fetchPendingList();
     refreshData();
+    fetchAllZoneLists(); // 🆕
   };
 
   // 🆕 手動停權 30 天
@@ -429,6 +491,7 @@ export default function Home() {
       setCheckInName('');
       setCheckInPassword('');
       refreshData();
+      fetchAllZoneLists(); // 🆕
     }
   };
 
@@ -467,7 +530,7 @@ export default function Home() {
     if (!pwd) return;
     const { error } = await supabase.from('pickleball_registrations').delete().eq('id', item.id).eq('password', pwd);
     if (error) alert('系統錯誤：' + error.message);
-    else { alert('取消成功！'); refreshData(); }
+    else { alert('取消成功！'); refreshData(); fetchAllZoneLists(); }
   };
 
   const currentUrl = typeof window !== 'undefined' ? `${window.location.origin}?mode=checkin` : '';
@@ -629,6 +692,94 @@ export default function Home() {
                       <button onClick={handleSaveCapacitySettings} className="w-full bg-sky-600 hover:bg-sky-700 text-white font-black py-2.5 rounded-xl text-sm">
                         儲存人數設定
                       </button>
+                    </div>
+
+                    {/* 🆕 全區名單管理：跟主後台一樣的分頁籤 + 攤平列表風格 */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-4">
+                      {(() => {
+                        const typeIcons = { experience: '🏸', normal: '🌱', openplay: '🔥' };
+
+                        // 依三個分區各自的人數上限計算正取/備取，並攤平成單一陣列
+                        const categoryConfirmedCounts = {};
+                        let combinedList = [];
+                        TYPE_ORDER.forEach(typeId => {
+                          const maxSeats = capacitySettings[typeId];
+                          const { main, wait } = splitMainAndWaitList(zoneLists[typeId] || [], maxSeats);
+                          categoryConfirmedCounts[typeId] = main.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+                          main.forEach(item => combinedList.push({ ...item, typeId, isConfirmed: true }));
+                          wait.forEach(item => combinedList.push({ ...item, typeId, isConfirmed: false }));
+                        });
+                        const grandConfirmedCount = TYPE_ORDER.reduce((sum, t) => sum + categoryConfirmedCounts[t], 0);
+
+                        const filteredList = combinedList.filter(item =>
+                          adminCategoryFilter === 'ALL' || item.typeId === adminCategoryFilter
+                        );
+
+                        return (
+                          <>
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                              <div className="text-lg font-black text-slate-800">全區名單管理（{activeDate}(週六)）</div>
+                              <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
+                                <button
+                                  onClick={() => setAdminCategoryFilter('ALL')}
+                                  className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all ${adminCategoryFilter === 'ALL' ? 'bg-[#1a4d4d] text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}
+                                >
+                                  全部 ({grandConfirmedCount})
+                                </button>
+                                {TYPE_ORDER.map(typeId => (
+                                  <button
+                                    key={typeId}
+                                    onClick={() => setAdminCategoryFilter(typeId)}
+                                    className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all ${adminCategoryFilter === typeId ? 'bg-[#1a4d4d] text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}
+                                  >
+                                    {typeIcons[typeId]} {TYPE_CONFIG[typeId].label} ({categoryConfirmedCounts[typeId]})
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              {filteredList.map(item => {
+                                const isPending = item.review_status === 'pending';
+                                return (
+                                  <div key={item.id} className="flex flex-col sm:flex-row justify-between items-center p-3 rounded-2xl border border-slate-200 bg-slate-50 gap-2">
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                      <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${isPending ? 'bg-amber-200 text-amber-900' : item.isConfirmed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                        {isPending ? '⏳ 審核中' : item.isConfirmed ? '正取' : '備取'}
+                                      </span>
+                                      <span className="font-bold text-base text-slate-800">{item.name}</span>
+                                      <span className="text-slate-600 font-bold text-sm">
+                                        ({typeIcons[item.typeId]} {TYPE_CONFIG[item.typeId].label} - {item.count}位)
+                                      </span>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleToggleArrived(item)}
+                                        className={`px-3 py-1.5 rounded-xl font-bold text-xs ${item.arrived ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}`}
+                                      >
+                                        {item.arrived ? '✅ 已到場 (點擊取消)' : '未到場 (點擊註記)'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleAdminDelete(item)}
+                                        className="bg-rose-100 text-rose-700 hover:bg-rose-200 px-3 py-1.5 rounded-xl font-bold text-xs"
+                                      >
+                                        刪除
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+
+                              {filteredList.length === 0 && (
+                                <div className="text-center py-8 text-slate-400 font-bold text-sm">
+                                  目前尚無報名紀錄
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     <button className="w-full bg-red-600 text-white p-3 rounded-2xl font-bold text-lg shadow hover:bg-red-700" onClick={handleSettleNoShow}>
