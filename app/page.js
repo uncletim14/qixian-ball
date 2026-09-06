@@ -165,7 +165,7 @@ export default function Home() {
   }, [activeDate]);
 
   const load = async () => {
-    const { data } = await supabase.from('pickleball_registrations').select('id, name, count, password, session_id, arrived, review_status').eq('session_id', currentSessionId).order('created_at', { ascending: true });
+    const { data } = await supabase.from('pickleball_registrations').select('id, name, count, session_id, arrived, review_status').eq('session_id', currentSessionId).order('created_at', { ascending: true });
     if (data) setList(data);
   };
 
@@ -246,7 +246,7 @@ export default function Home() {
 
   // 🆕 抓取所有待審核報名（不分場次分區，因為審核是全站通用的名字白名單）
   const fetchPendingList = async () => {
-    const { data } = await supabase.from('pickleball_registrations').select('*').eq('review_status', 'pending').order('created_at', { ascending: true });
+    const { data } = await supabase.from('pickleball_registrations').select('id, name, count, session_id, arrived, review_status, created_at').eq('review_status', 'pending').order('created_at', { ascending: true });
     setPendingList(data || []);
   };
 
@@ -478,10 +478,26 @@ export default function Home() {
     const targetItem = list.find(item => item.name === checkInName);
     if (!targetItem) return;
 
-    if (isSelfCheckIn && targetItem.password !== checkInPassword) {
-      alert('❌ 密碼錯誤！請輸入報名時設定的 4 位數密碼。');
-      setCheckInPassword('');
-      return;
+    // 🆕 密碼驗證改用資料庫查詢條件比對（伺服器端比對，只回傳「有沒有找到符合的那一筆」，
+    //    不會把密碼本身傳到瀏覽器），取代原本「把密碼抓到前端再比對」的不安全做法
+    if (isSelfCheckIn) {
+      const { data: matched, error: matchError } = await supabase
+        .from('pickleball_registrations')
+        .select('id')
+        .eq('id', targetItem.id)
+        .eq('password', checkInPassword)
+        .maybeSingle();
+
+      if (matchError) {
+        alert('系統錯誤：' + matchError.message);
+        return;
+      }
+
+      if (!matched) {
+        alert('❌ 密碼錯誤！請輸入報名時設定的 4 位數密碼。');
+        setCheckInPassword('');
+        return;
+      }
     }
 
     const { error } = await supabase.from('pickleball_registrations').update({ arrived: true }).eq('id', targetItem.id);
