@@ -52,6 +52,14 @@ export default function Home() {
   const [clickCount, setClickCount] = useState(0);
 
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
+
+  // 🆕 防灌爆機制：
+  // 1. honeypot：一般人看不到、不會填的隱藏欄位，機器人腳本常會自動把所有欄位都填一遍，
+  //    只要這欄有值就直接視為機器人，靜默擋下（不特別告知，避免對方調整腳本繼續嘗試）
+  // 2. formLoadedAt：記錄表單載入的時間，如果從載入到送出小於 1.2 秒，
+  //    代表極可能是自動化腳本瞬間送出，而非真人手動填寫
+  const [honeypot, setHoneypot] = useState('');
+  const [formLoadedAt] = useState(() => Date.now());
   const [checkInName, setCheckInName] = useState('');
   const [checkInPassword, setCheckInPassword] = useState('');
   const [userWarning, setUserWarning] = useState('');
@@ -383,6 +391,17 @@ export default function Home() {
 
   // 報名提交
   const submit = async () => {
+    // 🆕 防灌爆檢查 1：honeypot 欄位有值，直接視為機器人，靜默擋下（不顯示任何提示，避免對方察覺並調整腳本）
+    if (honeypot.trim() !== '') {
+      return;
+    }
+
+    // 🆕 防灌爆檢查 2：從表單載入到送出不到 1.2 秒，極可能是自動化腳本，用一般提示婉拒
+    if (Date.now() - formLoadedAt < 1200) {
+      alert('⚠️ 系統偵測到異常快速的送出行為，請稍後再試一次！');
+      return;
+    }
+
     if (isCancelled) {
       alert('⛈️ 本場次因雨取消，暫停報名！');
       return;
@@ -903,6 +922,19 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="space-y-4">
+                    {/* 🆕 honeypot 防灌爆欄位：一般使用者看不到、不會填，機器人腳本常會自動填滿所有欄位 */}
+                    <div style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }} aria-hidden="true">
+                      <label htmlFor="website">網站</label>
+                      <input
+                        type="text"
+                        id="website"
+                        name="website"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        value={honeypot}
+                        onChange={e => setHoneypot(e.target.value)}
+                      />
+                    </div>
                     <div>
                       <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                       {userWarning && (
