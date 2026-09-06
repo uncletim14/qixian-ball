@@ -544,9 +544,29 @@ export default function Home() {
   const handleDelete = async (item) => {
     const pwd = prompt('請輸入 4 位取消密碼：');
     if (!pwd) return;
-    const { error } = await supabase.from('pickleball_registrations').delete().eq('id', item.id).eq('password', pwd);
-    if (error) alert('系統錯誤：' + error.message);
-    else { alert('取消成功！'); refreshData(); fetchAllZoneLists(); }
+
+    // 🆕 加上 .select()，讓 Supabase 回傳「實際被刪除的那幾筆」；
+    //    密碼錯誤時會刪除 0 筆（不是 error），必須額外檢查有沒有真的刪到才能判斷密碼對不對
+    const { data, error } = await supabase
+      .from('pickleball_registrations')
+      .delete()
+      .eq('id', item.id)
+      .eq('password', pwd)
+      .select();
+
+    if (error) {
+      alert('系統錯誤：' + error.message);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      alert('❌ 密碼錯誤，取消失敗！');
+      return;
+    }
+
+    alert('取消成功！');
+    refreshData();
+    fetchAllZoneLists();
   };
 
   const currentUrl = typeof window !== 'undefined' ? `${window.location.origin}?mode=checkin` : '';
