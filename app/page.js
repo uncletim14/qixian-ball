@@ -29,13 +29,14 @@ function getTargetSaturdayDateStr() {
   return `${mm}/${dd}`;
 }
 
-// 🆕 三個分區設定（原本只有新手區/新手體驗，這次新增「一般散打(2.0以上)」）
+// 🆕 三個分區設定（人數上限改為可在管理員模式調整，這裡只留單筆報名限制與顯示用文字）
 const TYPE_CONFIG = {
-  experience: { label: '新手體驗', maxSeats: 9, perSubmitMax: 1, note: '開放報名(限9位)' },
-  normal: { label: '新手區', maxSeats: 8, perSubmitMax: 2, note: '開放報名(限8位)' },
-  openplay: { label: '一般散打(2.0以上)', maxSeats: 10, perSubmitMax: 2, note: '開放報名(限10位)' }
+  experience: { label: '新手體驗', perSubmitMax: 1 },
+  normal: { label: '新手區', perSubmitMax: 2 },
+  openplay: { label: '一般散打(2.0以上)', perSubmitMax: 2 }
 };
 const TYPE_ORDER = ['experience', 'normal', 'openplay'];
+const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10 };
 
 export default function Home() {
   const activeDate = getTargetSaturdayDateStr();
@@ -57,6 +58,10 @@ export default function Home() {
 
   // 🆕 因雨取消狀態（以日期本身為 key，整天生效，不分區域）
   const [isCancelled, setIsCancelled] = useState(false);
+
+  // 🆕 三個分區的人數上限（可在管理員模式調整，依日期各自獨立存放）
+  const [capacitySettings, setCapacitySettings] = useState(DEFAULT_CAPACITY);
+  const [capacityInputs, setCapacityInputs] = useState(DEFAULT_CAPACITY);
 
   // 🆕 管理員模式：報名審核清單
   const [pendingList, setPendingList] = useState([]);
@@ -87,7 +92,7 @@ export default function Home() {
 
   // 🆕 現在全部場次都在星期六早上，三個分區固定都開放（因雨取消時另外處理）
   const currentTypeConfig = TYPE_CONFIG[selectedType];
-  const maxSeatsLimit = currentTypeConfig.maxSeats;
+  const maxSeatsLimit = capacitySettings[selectedType];
 
   const currentSessionId = `${activeDate}_${selectedType}`;
 
@@ -149,6 +154,7 @@ export default function Home() {
   // 🆕 讀取本場次的因雨取消狀態
   useEffect(() => {
     fetchEventStatus();
+    fetchCapacitySettings();
   }, [activeDate]);
 
   const load = async () => {
@@ -159,6 +165,36 @@ export default function Home() {
   const fetchEventStatus = async () => {
     const { data } = await supabase.from('event_status').select('is_cancelled').eq('date_key', activeDate).maybeSingle();
     setIsCancelled(data?.is_cancelled || false);
+  };
+
+  // 🆕 讀取本場次三個分區的人數上限設定，沒有設定過就用預設值
+  const fetchCapacitySettings = async () => {
+    const { data } = await supabase.from('event_settings').select('*').eq('date_key', activeDate).maybeSingle();
+    const settings = {
+      experience: data?.experience_max ?? DEFAULT_CAPACITY.experience,
+      normal: data?.normal_max ?? DEFAULT_CAPACITY.normal,
+      openplay: data?.openplay_max ?? DEFAULT_CAPACITY.openplay
+    };
+    setCapacitySettings(settings);
+    setCapacityInputs(settings);
+  };
+
+  // 🆕 儲存人數上限設定（管理員用）
+  const handleSaveCapacitySettings = async () => {
+    const { error } = await supabase.from('event_settings').upsert({
+      date_key: activeDate,
+      experience_max: parseInt(capacityInputs.experience) || 0,
+      normal_max: parseInt(capacityInputs.normal) || 0,
+      openplay_max: parseInt(capacityInputs.openplay) || 0
+    }, { onConflict: 'date_key' });
+
+    if (error) {
+      alert(`儲存失敗：${error.message}`);
+      return;
+    }
+
+    alert(`🎉 已儲存【${activeDate}】場次的人數設定！`);
+    setCapacitySettings({ ...capacityInputs });
   };
 
   // 🆕 依報名先後順序排隊佔位：pending（審核中）跟 approved（已審核）一起排，
@@ -527,7 +563,7 @@ export default function Home() {
                     <span className="text-base sm:text-2xl text-center leading-tight">{cfg.label}</span>
                     {!isCheckInMode && (
                       <span className="text-xs sm:text-lg font-bold text-[#0070C0] text-center">
-                        ({cfg.note})
+                        (開放報名(限{capacitySettings[typeId]}位))
                       </span>
                     )}
                   </button>
@@ -565,6 +601,28 @@ export default function Home() {
                     >
                       {isCancelled ? '⛈️ 因雨取消中（點擊恢復正常）' : '🟢 球敘正常（點擊設為因雨取消）'}
                     </button>
+
+                    {/* 🆕 人數上限設定 */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
+                      <div className="text-sm font-black text-slate-600">⚙️ 設定【{activeDate}】三個分區人數上限</div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {TYPE_ORDER.map(typeId => (
+                          <div key={typeId} className="flex flex-col items-center gap-1 bg-slate-50 p-2 rounded-xl">
+                            <label className="text-xs font-bold text-slate-500">{TYPE_CONFIG[typeId].label}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={capacityInputs[typeId]}
+                              onChange={e => setCapacityInputs({ ...capacityInputs, [typeId]: e.target.value })}
+                              className="w-full bg-white border p-2 rounded-lg font-black text-center text-lg"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={handleSaveCapacitySettings} className="w-full bg-sky-600 hover:bg-sky-700 text-white font-black py-2.5 rounded-xl text-sm">
+                        儲存人數設定
+                      </button>
+                    </div>
 
                     <button className="w-full bg-red-600 text-white p-3 rounded-2xl font-bold text-lg shadow hover:bg-red-700" onClick={handleSettleNoShow}>
                       ⚠️ 結算今天未報到者（僅紀錄缺席）
