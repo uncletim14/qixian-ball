@@ -655,7 +655,7 @@ export default function Home() {
                 {/* 活潑標籤區塊 */}
                 <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 text-xs sm:text-base font-extrabold">
                   <span className="bg-white/80 text-[#0070C0] px-3 py-1.5 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1">
-                    🎽 新手單次 $100
+                    🎽 1人 $100
                   </span>
                   <span className="bg-white/80 text-[#0070C0] px-3 py-1.5 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1">
                     🏓 租借球拍 $50
