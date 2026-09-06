@@ -29,14 +29,31 @@ function getTargetSaturdayDateStr() {
   return `${mm}/${dd}`;
 }
 
-// 🆕 三個分區設定（人數上限改為可在管理員模式調整，這裡只留單筆報名限制與顯示用文字）
+// 🆕 四個分區設定（新增「散打(晚上)」，人數上限可在管理員模式調整，這裡只留單筆報名限制與顯示用文字）
 const TYPE_CONFIG = {
   experience: { label: '新手體驗', perSubmitMax: 1 },
   normal: { label: '新手區', perSubmitMax: 2 },
-  openplay: { label: '一般散打(2.0以上)', perSubmitMax: 2 }
+  openplay: { label: '一般散打(2.0以上)', perSubmitMax: 2 },
+  openplay_pm: { label: '散打(晚上)', perSubmitMax: 2 }
 };
-const TYPE_ORDER = ['experience', 'normal', 'openplay'];
-const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10 };
+const TYPE_ORDER = ['experience', 'normal', 'openplay', 'openplay_pm'];
+const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10, openplay_pm: 9 };
+
+// 🆕 依分區區分的時段設定：早上三區 9:00-12:00（8:30截止/9:00鎖定），
+//    晚上散打 19:00-21:20（18:30截止/19:00鎖定，跟散打區網站一致）
+const SESSION_TIMING = {
+  experience: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
+  normal: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
+  openplay: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
+  openplay_pm: { cutoff: 1830, lock: 1900, boardTime: '19:00 - 21:20', checkinStart: 1830, checkinEnd: 2100 }
+};
+
+// 🆕 把 830 這種數字格式轉成 "8:30" 方便顯示
+function formatTimeVal(v) {
+  const h = Math.floor(v / 100);
+  const m = v % 100;
+  return `${h}:${String(m).padStart(2, '0')}`;
+}
 
 export default function Home() {
   const activeDate = getTargetSaturdayDateStr();
@@ -91,6 +108,13 @@ export default function Home() {
       }
     }
   }, []);
+
+  // 🆕 自助報到模式需要涵蓋全部分區（含晚上散打），所以要抓取全區名單
+  useEffect(() => {
+    if (isSelfCheckIn) {
+      fetchAllZoneLists();
+    }
+  }, [isSelfCheckIn, activeDate]);
 
   const handleSecretClick = () => {
     const newCount = clickCount + 1;
@@ -188,7 +212,8 @@ export default function Home() {
     const settings = {
       experience: data?.experience_max ?? DEFAULT_CAPACITY.experience,
       normal: data?.normal_max ?? DEFAULT_CAPACITY.normal,
-      openplay: data?.openplay_max ?? DEFAULT_CAPACITY.openplay
+      openplay: data?.openplay_max ?? DEFAULT_CAPACITY.openplay,
+      openplay_pm: data?.openplay_pm_max ?? DEFAULT_CAPACITY.openplay_pm
     };
     setCapacitySettings(settings);
     setCapacityInputs(settings);
@@ -200,7 +225,8 @@ export default function Home() {
       date_key: activeDate,
       experience_max: parseInt(capacityInputs.experience) || 0,
       normal_max: parseInt(capacityInputs.normal) || 0,
-      openplay_max: parseInt(capacityInputs.openplay) || 0
+      openplay_max: parseInt(capacityInputs.openplay) || 0,
+      openplay_pm_max: parseInt(capacityInputs.openplay_pm) || 0
     }, { onConflict: 'date_key' });
 
     if (error) {
@@ -418,9 +444,10 @@ export default function Home() {
     const currentTimeValue = currentHours * 100 + currentMinutes;
     const todayStr = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
 
-    // 🆕 早上場提前到 8:30 截止新增報名（原本是晚上場的 18:30）
-    if (activeDate === todayStr && currentTimeValue >= 830) {
-      alert('🚫 抱歉！今天的報名已於 8:30 截止囉！');
+    // 🆕 依分區的截止時間判斷（早上三區 8:30 截止；晚上散打 18:30 截止）
+    const timing = SESSION_TIMING[selectedType];
+    if (activeDate === todayStr && currentTimeValue >= timing.cutoff) {
+      alert(`🚫 抱歉！今天的【${currentTypeConfig.label}】報名已於 ${formatTimeVal(timing.cutoff)} 截止囉！`);
       return;
     }
 
@@ -479,12 +506,25 @@ export default function Home() {
   const handleCheckInSubmit = async () => {
     if (!checkInName) { alert('請選擇你的暱稱！'); return; }
 
+    // 🆕 自助報到現在要涵蓋全部分區（含晚上散打），從 zoneLists 找出符合姓名的那一筆，
+    //    並記錄它屬於哪個分區，才能套用該分區各自的報到時間窗
+    let targetItem = null;
     if (isSelfCheckIn) {
+      for (const typeId of TYPE_ORDER) {
+        const found = (zoneLists[typeId] || []).find(item => item.name === checkInName);
+        if (found) { targetItem = { ...found, typeId }; break; }
+      }
+    } else {
+      targetItem = list.find(item => item.name === checkInName);
+    }
+    if (!targetItem) return;
+
+    if (isSelfCheckIn) {
+      const timing = SESSION_TIMING[targetItem.typeId] || SESSION_TIMING.normal;
       const now = new Date();
       const timeVal = now.getHours() * 100 + now.getMinutes();
-      // 🆕 早上場報到時間窗改為 8:30 ~ 12:00
-      if (timeVal < 830 || timeVal > 1200) {
-        alert('🚫 目前非報到時間！現場開放報到時間為 8:30 ~ 12:00。');
+      if (timeVal < timing.checkinStart || timeVal > timing.checkinEnd) {
+        alert(`🚫 目前非報到時間！【${TYPE_CONFIG[targetItem.typeId].label}】開放報到時間為 ${formatTimeVal(timing.checkinStart)} ~ ${formatTimeVal(timing.checkinEnd)}。`);
         return;
       }
 
@@ -493,9 +533,6 @@ export default function Home() {
         return;
       }
     }
-
-    const targetItem = list.find(item => item.name === checkInName);
-    if (!targetItem) return;
 
     // 🆕 密碼驗證改用資料庫查詢條件比對（伺服器端比對，只回傳「有沒有找到符合的那一筆」，
     //    不會把密碼本身傳到瀏覽器），取代原本「把密碼抓到前端再比對」的不安全做法
@@ -607,7 +644,7 @@ export default function Home() {
           <div className={`border-t-2 border-dashed pt-4 mt-4 sm:mt-6 space-y-3 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#b6d7a8]'}`}>
             {isSelfCheckIn ? (
               <p className="text-[#0ca678] text-base sm:text-xl font-extrabold tracking-wide animate-pulse">
-                📱 現場自助報到專區 (限 8:30 - 12:00)
+                📱 現場自助報到專區 (早上場 8:30-12:00 / 晚上散打 18:30-21:00)
               </p>
             ) : isCheckInMode ? (
               <p className="text-[#d94800] text-base sm:text-xl font-extrabold tracking-wide">
@@ -653,15 +690,24 @@ export default function Home() {
         {isSelfCheckIn ? (
           <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-6 rounded-3xl shadow-lg text-center space-y-4">
             <div className="text-2xl font-black text-[#0ca678]">📍 請選擇暱稱並輸入報名密碼</div>
-            <p className="text-sm text-slate-500 font-bold">⏰ 報到開放時間：8:30 ~ 12:00</p>
+            <p className="text-sm text-slate-500 font-bold">⏰ 早上三區報到 8:30~12:00；晚上散打報到 18:30~21:00</p>
 
             <select className="w-full p-4 bg-white rounded-2xl text-xl font-bold border-2 border-[#63e6be] focus:outline-none" value={checkInName} onChange={e => setCheckInName(e.target.value)}>
               <option value="">-- 請選擇你的暱稱 --</option>
-              {mainList.map(item => (
-                <option key={item.id} value={item.name} disabled={item.arrived}>
-                  {item.name} ({item.count}位) {item.isPromoted ? ' [🎉備取成功]' : ''} {item.arrived ? ' ✓ [已報到]' : ''}
-                </option>
-              ))}
+              {(() => {
+                // 🆕 自助報到選單改為涵蓋全部分區（含晚上散打）的正取名單
+                let combined = [];
+                TYPE_ORDER.forEach(typeId => {
+                  const maxSeats = capacitySettings[typeId] ?? DEFAULT_CAPACITY[typeId];
+                  const { main } = splitMainAndWaitList(zoneLists[typeId] || [], maxSeats);
+                  main.forEach(item => combined.push({ ...item, typeId }));
+                });
+                return combined.map(item => (
+                  <option key={item.id} value={item.name} disabled={item.arrived}>
+                    {item.name}（{TYPE_CONFIG[item.typeId].label} - {item.count}位）{item.isPromoted ? ' [🎉備取成功]' : ''} {item.arrived ? ' ✓ [已報到]' : ''}
+                  </option>
+                ));
+              })()}
             </select>
 
             <input
@@ -680,7 +726,7 @@ export default function Home() {
         ) : (
           <>
             {/* 🆕 組別選擇：三個分區（新手體驗 / 新手區 / 一般散打） */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
               {TYPE_ORDER.map(typeId => {
                 const cfg = TYPE_CONFIG[typeId];
                 return (
@@ -698,8 +744,8 @@ export default function Home() {
 
             {/* 看板 */}
             <div className="bg-white border border-[#0070C0]/20 rounded-2xl p-4 sm:p-6 text-center space-y-1 shadow-sm">
-              <div className="text-2xl sm:text-4xl font-black text-[#0070C0] tracking-wide">⏰ 時間：9:00 - 12:00</div>
-              <div className="text-sm sm:text-base text-red-500 font-bold">⚠️ 當天 8:30 後即截止報名</div>
+              <div className="text-2xl sm:text-4xl font-black text-[#0070C0] tracking-wide">⏰ 時間：{SESSION_TIMING[selectedType].boardTime}</div>
+              <div className="text-sm sm:text-base text-red-500 font-bold">⚠️ 當天 {formatTimeVal(SESSION_TIMING[selectedType].cutoff)} 後即截止報名</div>
             </div>
 
             {/* 表單 / 點名區 */}
@@ -729,8 +775,8 @@ export default function Home() {
 
                     {/* 🆕 人數上限設定 */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
-                      <div className="text-sm font-black text-slate-600">⚙️ 設定【{activeDate}】三個分區人數上限</div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="text-sm font-black text-slate-600">⚙️ 設定【{activeDate}】四個分區人數上限</div>
+                      <div className="grid grid-cols-2 gap-2">
                         {TYPE_ORDER.map(typeId => (
                           <div key={typeId} className="flex flex-col items-center gap-1 bg-slate-50 p-2 rounded-xl">
                             <label className="text-xs font-bold text-slate-500">{TYPE_CONFIG[typeId].label}</label>
@@ -752,7 +798,7 @@ export default function Home() {
                     {/* 🆕 全區名單管理：跟主後台一樣的分頁籤 + 攤平列表風格 */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-4">
                       {(() => {
-                        const typeIcons = { experience: '🏸', normal: '🌱', openplay: '🔥' };
+                        const typeIcons = { experience: '🏸', normal: '🌱', openplay: '🔥', openplay_pm: '🌙' };
 
                         // 依三個分區各自的人數上限計算正取/備取，並攤平成單一陣列
                         const categoryConfirmedCounts = {};
@@ -1021,7 +1067,7 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 sm:p-8 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl">
             <h3 className="text-2xl font-black text-[#0070C0]">請球友掃描 QR Code 報到</h3>
-            <p className="text-slate-500 text-sm">開放時間：8:30 - 12:00</p>
+            <p className="text-slate-500 text-sm">開放時間：早上場 8:30-12:00 / 晚上散打 18:30-21:00</p>
             <div className="flex justify-center p-2 bg-slate-50 rounded-2xl border">
               <img src={qrCodeImageUrl} alt="報到 QR Code" className="w-60 h-60" />
             </div>
