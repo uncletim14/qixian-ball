@@ -93,6 +93,8 @@ export default function Home() {
   // 🆕 現在全部場次都在星期六早上，三個分區固定都開放（因雨取消時另外處理）
   const currentTypeConfig = TYPE_CONFIG[selectedType];
   const maxSeatsLimit = capacitySettings[selectedType];
+  // 🆕 人數上限設為 0 時，代表幹部把這個分區關閉了，要真的擋下報名，而不是讓它排備取
+  const isCurrentTypeClosed = maxSeatsLimit === 0;
 
   const currentSessionId = `${activeDate}_${selectedType}`;
 
@@ -321,6 +323,11 @@ export default function Home() {
   const submit = async () => {
     if (isCancelled) {
       alert('⛈️ 本場次因雨取消，暫停報名！');
+      return;
+    }
+
+    if (isCurrentTypeClosed) {
+      alert(`⚠️ 本場次【${currentTypeConfig.label}】暫未開放報名！`);
       return;
     }
 
@@ -562,8 +569,8 @@ export default function Home() {
                   <button key={typeId} onClick={() => setSelectedType(typeId)} className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${selectedType === typeId ? 'bg-[#D9EAD3] text-[#0070C0] border-[#0070C0]' : 'bg-white text-[#718096] border-transparent hover:text-[#0070C0]'}`}>
                     <span className="text-base sm:text-2xl text-center leading-tight">{cfg.label}</span>
                     {!isCheckInMode && (
-                      <span className="text-xs sm:text-lg font-bold text-[#0070C0] text-center">
-                        (開放報名(限{capacitySettings[typeId]}位))
+                      <span className={`text-xs sm:text-lg font-bold text-center ${capacitySettings[typeId] === 0 ? 'text-red-500' : 'text-[#0070C0]'}`}>
+                        {capacitySettings[typeId] === 0 ? '❌ 本區未開放' : `(開放報名(限${capacitySettings[typeId]}位))`}
                       </span>
                     )}
                   </button>
@@ -701,6 +708,11 @@ export default function Home() {
                   <div className="text-center py-6 space-y-2">
                     <p className="text-2xl font-black text-red-600">⛈️ 本場次因雨取消</p>
                     <p className="text-sm font-bold text-slate-500">本場次已因雨取消，暫停報名，請留意後續開放通知</p>
+                  </div>
+                ) : isCurrentTypeClosed ? (
+                  <div className="text-center py-6 space-y-2">
+                    <p className="text-2xl font-black text-red-600">🚫 本區未開放</p>
+                    <p className="text-sm font-bold text-slate-500">幹部已將本場次【{currentTypeConfig.label}】人數設為 0 位，暫不開放報名。</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
