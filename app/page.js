@@ -819,7 +819,15 @@ export default function Home() {
                         return (
                           <>
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                              <div className="text-lg font-black text-slate-800">全區名單管理（{activeDate}(週六)）</div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-lg font-black text-slate-800">全區名單管理（{activeDate}(週六)）</div>
+                                <button
+                                  onClick={fetchAllZoneLists}
+                                  className="text-xs font-bold text-sky-600 hover:text-sky-800 underline shrink-0"
+                                >
+                                  🔄 重新整理
+                                </button>
+                              </div>
                               <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
                                 <button
                                   onClick={() => setAdminCategoryFilter('ALL')}
