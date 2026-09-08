@@ -240,19 +240,23 @@ export default function Home() {
 
   // 🆕 依報名先後順序排隊佔位：pending（審核中）跟 approved（已審核）一起排，
   //    只是顯示標籤不同（審核中 vs 正取/備取），若審核中的人後續被拒絕會自動釋出名額
+  // 🆕 修正插隊漏洞：一旦有人因為人數不足被擋到備取，後面所有人（即使人數少、剛好塞得進去）
+  //    也一律算備取，不能插隊超過排在前面但人數較多的人，維持嚴格先來後到
   let currentTotal = 0;
   let originalSeatsSum = 0;
+  let hasHitCapacity = false;
   const mainList = [];
   const waitList = [];
 
   list.forEach((item) => {
     const seats = Number(item.count) || 0;
 
-    if (currentTotal + seats <= maxSeatsLimit) {
+    if (!hasHitCapacity && currentTotal + seats <= maxSeatsLimit) {
       const isPromoted = originalSeatsSum >= maxSeatsLimit;
       mainList.push({ ...item, isPromoted });
       currentTotal += seats;
     } else {
+      hasHitCapacity = true;
       waitList.push(item);
     }
 
@@ -291,17 +295,20 @@ export default function Home() {
   };
 
   // 🆕 依報名先後順序計算正取/備取（跟畫面上主要清單同一套邏輯，供全區名單使用）
+  // 🆕 同樣修正插隊漏洞：一旦有人被擋到備取，後面所有人一律算備取，不能插隊
   const splitMainAndWaitList = (items, maxSeats) => {
     let total = 0;
     let seatsSum = 0;
+    let hitCapacity = false;
     const main = [];
     const wait = [];
     items.forEach((item) => {
       const seats = Number(item.count) || 0;
-      if (total + seats <= maxSeats) {
+      if (!hitCapacity && total + seats <= maxSeats) {
         main.push({ ...item, isPromoted: seatsSum >= maxSeats });
         total += seats;
       } else {
+        hitCapacity = true;
         wait.push(item);
       }
       seatsSum += seats;
