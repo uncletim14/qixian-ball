@@ -29,22 +29,26 @@ function getTargetSaturdayDateStr() {
   return `${mm}/${dd}`;
 }
 
-// 🆕 四個分區設定（新增「散打(晚上)」，人數上限可在管理員模式調整，這裡只留單筆報名限制與顯示用文字）
+// 🆕 六個分區設定（新增「新手體驗(晚上)」，人數上限可在管理員模式調整，這裡只留單筆報名限制與顯示用文字）
 const TYPE_CONFIG = {
   experience: { label: '新手體驗', perSubmitMax: 1 },
   normal: { label: '新手區', perSubmitMax: 2 },
   openplay: { label: '一般散打(2.0以上)', perSubmitMax: 2 },
+  experience_pm: { label: '新手體驗(晚上)', perSubmitMax: 1 },
+  normal_pm: { label: '新手區(晚上)', perSubmitMax: 2 },
   openplay_pm: { label: '散打(晚上)', perSubmitMax: 2 }
 };
-const TYPE_ORDER = ['experience', 'normal', 'openplay', 'openplay_pm'];
-const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10, openplay_pm: 9 };
+const TYPE_ORDER = ['experience', 'normal', 'openplay', 'experience_pm', 'normal_pm', 'openplay_pm'];
+const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10, experience_pm: 9, normal_pm: 9, openplay_pm: 9 };
 
 // 🆕 依分區區分的時段設定：早上三區 9:00-12:00（8:30截止/9:00鎖定），
-//    晚上散打 19:00-21:20（18:30截止/19:00鎖定，跟散打區網站一致）
+//    晚上三區 19:00-21:20（18:30截止/19:00鎖定，跟散打區網站一致）
 const SESSION_TIMING = {
   experience: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
   normal: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
   openplay: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
+  experience_pm: { cutoff: 1830, lock: 1900, boardTime: '19:00 - 21:20', checkinStart: 1830, checkinEnd: 2100 },
+  normal_pm: { cutoff: 1830, lock: 1900, boardTime: '19:00 - 21:20', checkinStart: 1830, checkinEnd: 2100 },
   openplay_pm: { cutoff: 1830, lock: 1900, boardTime: '19:00 - 21:20', checkinStart: 1830, checkinEnd: 2100 }
 };
 
@@ -213,6 +217,8 @@ export default function Home() {
       experience: data?.experience_max ?? DEFAULT_CAPACITY.experience,
       normal: data?.normal_max ?? DEFAULT_CAPACITY.normal,
       openplay: data?.openplay_max ?? DEFAULT_CAPACITY.openplay,
+      experience_pm: data?.experience_pm_max ?? DEFAULT_CAPACITY.experience_pm,
+      normal_pm: data?.normal_pm_max ?? DEFAULT_CAPACITY.normal_pm,
       openplay_pm: data?.openplay_pm_max ?? DEFAULT_CAPACITY.openplay_pm
     };
     setCapacitySettings(settings);
@@ -226,6 +232,8 @@ export default function Home() {
       experience_max: parseInt(capacityInputs.experience) || 0,
       normal_max: parseInt(capacityInputs.normal) || 0,
       openplay_max: parseInt(capacityInputs.openplay) || 0,
+      experience_pm_max: parseInt(capacityInputs.experience_pm) || 0,
+      normal_pm_max: parseInt(capacityInputs.normal_pm) || 0,
       openplay_pm_max: parseInt(capacityInputs.openplay_pm) || 0
     }, { onConflict: 'date_key' });
 
@@ -733,7 +741,7 @@ export default function Home() {
         ) : (
           <>
             {/* 🆕 組別選擇：三個分區（新手體驗 / 新手區 / 一般散打） */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
               {TYPE_ORDER.map(typeId => {
                 const cfg = TYPE_CONFIG[typeId];
                 return (
@@ -782,8 +790,8 @@ export default function Home() {
 
                     {/* 🆕 人數上限設定 */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
-                      <div className="text-sm font-black text-slate-600">⚙️ 設定【{activeDate}】四個分區人數上限</div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="text-sm font-black text-slate-600">⚙️ 設定【{activeDate}】六個分區人數上限</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {TYPE_ORDER.map(typeId => (
                           <div key={typeId} className="flex flex-col items-center gap-1 bg-slate-50 p-2 rounded-xl">
                             <label className="text-xs font-bold text-slate-500">{TYPE_CONFIG[typeId].label}</label>
@@ -805,7 +813,7 @@ export default function Home() {
                     {/* 🆕 全區名單管理：跟主後台一樣的分頁籤 + 攤平列表風格 */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-4">
                       {(() => {
-                        const typeIcons = { experience: '🏸', normal: '🌱', openplay: '🔥', openplay_pm: '🌙' };
+                        const typeIcons = { experience: '🏸', normal: '🌱', openplay: '🔥', experience_pm: '🌟', normal_pm: '🌛', openplay_pm: '🌙' };
 
                         // 依三個分區各自的人數上限計算正取/備取，並攤平成單一陣列
                         const categoryConfirmedCounts = {};
