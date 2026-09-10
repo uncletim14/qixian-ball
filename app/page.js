@@ -39,6 +39,11 @@ const TYPE_CONFIG = {
   openplay_pm: { label: '散打(晚上)', perSubmitMax: 2 }
 };
 const TYPE_ORDER = ['experience', 'normal', 'openplay', 'experience_pm', 'normal_pm', 'openplay_pm'];
+// 🆕 早上/晚上時段各自包含的分區（給報名選單用；後台管理相關功能仍用 TYPE_ORDER 涵蓋全部6個分區）
+const SESSION_TYPES = {
+  AM: ['experience', 'normal', 'openplay'],
+  PM: ['experience_pm', 'normal_pm', 'openplay_pm']
+};
 const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10, experience_pm: 9, normal_pm: 9, openplay_pm: 9 };
 
 // 🆕 依分區區分的時段設定：早上三區 9:00-12:00（8:30截止/9:00鎖定），
@@ -63,6 +68,8 @@ export default function Home() {
   const activeDate = getTargetSaturdayDateStr();
 
   const [selectedType, setSelectedType] = useState('normal');
+  // 🆕 早上/晚上時段選擇：先選時段，才會顯示該時段的三個分區
+  const [selectedSession, setSelectedSession] = useState('AM');
   const [list, setList] = useState([]);
   const [isCheckInMode, setIsCheckInMode] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -142,6 +149,11 @@ export default function Home() {
   useEffect(() => {
     setForm(prev => ({ ...prev, count: '1' }));
   }, [selectedType]);
+
+  // 🆕 切換早上/晚上時段時，自動切換到該時段的預設分區（新手區）
+  useEffect(() => {
+    setSelectedType(selectedSession === 'AM' ? 'normal' : 'normal_pm');
+  }, [selectedSession]);
 
   useEffect(() => {
     setAdminPin('');
@@ -682,7 +694,7 @@ export default function Home() {
 
                 {/* 🆕 本場次日期 + 時間資訊 */}
                 <p className="text-[#0070C0] text-base sm:text-2xl font-black tracking-wide pt-1">
-                  📅 本場次：週六 {activeDate}（9:00 - 12:00）
+                  📅 本場次：週六 {activeDate}（早上9:00-12:00 / 晚上19:00-21:20）
                 </p>
 
                 {/* 🔴 網站更新提示 🔴 */}
@@ -740,9 +752,27 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* 🆕 組別選擇：三個分區（新手體驗 / 新手區 / 一般散打） */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
-              {TYPE_ORDER.map(typeId => {
+            {/* 🆕 先選早上／晚上時段入口 */}
+            {!isCheckInMode && (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setSelectedSession('AM')}
+                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-2 flex items-center justify-center gap-2 ${selectedSession === 'AM' ? 'bg-[#0070C0] text-white border-[#0070C0] shadow-lg' : 'bg-white text-slate-500 border-transparent hover:text-[#0070C0]'}`}
+                >
+                  🌅 早上場 (9:00-12:00)
+                </button>
+                <button
+                  onClick={() => setSelectedSession('PM')}
+                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-2 flex items-center justify-center gap-2 ${selectedSession === 'PM' ? 'bg-[#0070C0] text-white border-[#0070C0] shadow-lg' : 'bg-white text-slate-500 border-transparent hover:text-[#0070C0]'}`}
+                >
+                  🌙 晚上場 (19:00-21:20)
+                </button>
+              </div>
+            )}
+
+            {/* 🆕 組別選擇：該時段的三個分區（新手體驗／新手區／散打） */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+              {(isCheckInMode ? TYPE_ORDER : SESSION_TYPES[selectedSession]).map(typeId => {
                 const cfg = TYPE_CONFIG[typeId];
                 return (
                   <button key={typeId} onClick={() => setSelectedType(typeId)} className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${selectedType === typeId ? 'bg-[#D9EAD3] text-[#0070C0] border-[#0070C0]' : 'bg-white text-[#718096] border-transparent hover:text-[#0070C0]'}`}>
