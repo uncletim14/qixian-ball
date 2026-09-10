@@ -680,22 +680,24 @@ export default function Home() {
             ) : (
               <>
                 {/* 活潑標籤區塊 */}
-                <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 text-xs sm:text-base font-extrabold">
-                  <span className="bg-white/80 text-[#0070C0] px-3 py-1.5 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1">
+                <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 text-base sm:text-xl font-extrabold">
+                  <span className="bg-white/80 text-[#0070C0] px-4 py-2 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1.5">
                     🎽 1人 $100
                   </span>
-                  <span className="bg-white/80 text-[#0070C0] px-3 py-1.5 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1">
+                  <span className="bg-white/80 text-[#0070C0] px-4 py-2 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1.5">
                     🏓 租借球拍 $50
                   </span>
-                  <span className="bg-emerald-500 text-white px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1">
+                  <span className="bg-emerald-500 text-white px-4 py-2 rounded-full shadow-sm flex items-center gap-1.5">
                     🎁 新手體驗免費
                   </span>
                 </div>
 
-                {/* 🆕 本場次日期 + 時間資訊 */}
-                <p className="text-[#0070C0] text-base sm:text-2xl font-black tracking-wide pt-1">
-                  📅 本場次：週六 {activeDate}（早上9:00-12:00 / 晚上19:00-21:20）
-                </p>
+                {/* 🆕 本場次日期 + 時間資訊（早上/晚上分兩行顯示） */}
+                <div className="text-[#0070C0] text-base sm:text-2xl font-black tracking-wide pt-1 space-y-1">
+                  <p>📅 本場次：週六 {activeDate}</p>
+                  <p>🌅 早上 9:00-12:00</p>
+                  <p>🌙 晚上 19:00-21:20</p>
+                </div>
 
                 {/* 🔴 網站更新提示 🔴 */}
                 <p className="text-red-600 text-sm sm:text-lg font-black tracking-wider pt-1 flex items-center justify-center gap-1">
