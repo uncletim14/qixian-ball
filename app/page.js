@@ -7,6 +7,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // 🆕 現在只剩星期六一個場次（早上 9:00-12:00），每週六晚上 22:00 開放下一個星期六的報名
+// 🆕 日期格式改為 YYYY/MM/DD（含年份），避免跨年後日期混淆或排序錯亂
 function getTargetSaturdayDateStr() {
   const now = new Date();
   const currentDay = now.getDay(); // 0=週日 ... 6=週六
@@ -24,9 +25,10 @@ function getTargetSaturdayDateStr() {
   const targetDate = new Date(now);
   targetDate.setDate(now.getDate() + daysUntilSaturday + (isNextWeek ? 7 : 0));
 
+  const yyyy = targetDate.getFullYear();
   const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
   const dd = String(targetDate.getDate()).padStart(2, '0');
-  return `${mm}/${dd}`;
+  return `${yyyy}/${mm}/${dd}`;
 }
 
 // 🆕 產生未來一個月內（含目前這個目標星期六）所有星期六的日期清單，
@@ -50,9 +52,10 @@ function getUpcomingSaturdayDates(count) {
   for (let i = 0; i < count; i++) {
     const d = new Date(firstTarget);
     d.setDate(firstTarget.getDate() + i * 7);
+    const yyyy2 = d.getFullYear();
     const mm2 = String(d.getMonth() + 1).padStart(2, '0');
     const dd2 = String(d.getDate()).padStart(2, '0');
-    result.push(`${mm2}/${dd2}`);
+    result.push(`${yyyy2}/${mm2}/${dd2}`);
   }
   return result;
 }
@@ -67,6 +70,8 @@ const TYPE_CONFIG = {
   openplay_pm: { label: '散打(晚上)', perSubmitMax: 4 }
 };
 const TYPE_ORDER = ['experience', 'normal', 'openplay', 'experience_pm', 'normal_pm', 'openplay_pm'];
+// 🆕 各分區每人收費金額（新手體驗免費，其餘皆 $100/人），供自動帶入報名費收入使用
+const CATEGORY_PRICE = { experience: 0, normal: 100, openplay: 100, experience_pm: 0, normal_pm: 100, openplay_pm: 100 };
 // 🆕 早上/晚上時段各自包含的分區（給報名選單用；後台管理相關功能仍用 TYPE_ORDER 涵蓋全部6個分區）
 const SESSION_TYPES = {
   AM: ['experience', 'normal', 'openplay'],
@@ -144,9 +149,17 @@ export default function Home() {
   // 🆕 現場收支記帳（跟人數設定共用 settingsDateKey 這個日期選單）
   const [financialRecords, setFinancialRecords] = useState([]);
   const [finType, setFinType] = useState('income');
-  const [finCategory, setFinCategory] = useState('報名費');
+  const [finCategory, setFinCategory] = useState('租拍');
   const [finAmount, setFinAmount] = useState('');
   const [finNote, setFinNote] = useState('');
+
+  // 🆕 即時計算的報名費收入（不寫進 financial_records，每次都重新算，永遠準確不會重複計算）
+  const [feeSummary, setFeeSummary] = useState({ expected: 0, actual: 0 });
+
+  // 🆕 月份報表篩選（因為 date_key 格式是 MM/DD 沒有年份，先以月份分組篩選）
+  const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
+  const [selectedExportMonth, setSelectedExportMonth] = useState(currentMonthStr);
+  const [availableExportMonths, setAvailableExportMonths] = useState([currentMonthStr]);
 
   // 🆕 管理員模式：報名審核清單
   const [pendingList, setPendingList] = useState([]);
@@ -417,36 +430,131 @@ export default function Home() {
     fetchFinancialRecords(settingsDateKey);
   };
 
-  // 🆕 匯出全部記帳紀錄成 CSV（可用 Excel 開啟）
-  const handleExportFinancialCSV = async () => {
-    const { data } = await supabase.from('financial_records').select('*').order('date_key', { ascending: true });
+  // 🆕 即時計算「預計報名費收入」與「總實收(已簽到)」，不寫進資料庫，每次都重新算，
+  //    因此永遠準確反映當下最新的報名/簽到狀況，不用手動觸發、也不會重複計算
+  const computeRegistrationFeeSummary = async (dateKey) => {
+    const capacity = await fetchCapacityForDate(dateKey);
 
-    if (!data || data.length === 0) {
-      alert('目前尚無任何記帳紀錄！');
+    const sessionIds = TYPE_ORDER.map(typeId => `${dateKey}_${typeId}`);
+    const { data } = await supabase
+      .from('pickleball_registrations')
+      .select('id, name, count, session_id, arrived, review_status')
+      .in('session_id', sessionIds);
+
+    const grouped = { experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] };
+    (data || []).forEach(item => {
+      const typeId = item.session_id.replace(`${dateKey}_`, '');
+      if (grouped[typeId]) grouped[typeId].push(item);
+    });
+
+    let expected = 0;
+    let actual = 0;
+    TYPE_ORDER.forEach(typeId => {
+      const maxSeats = capacity[typeId];
+      const { main } = splitMainAndWaitList(grouped[typeId], maxSeats);
+      const confirmedNonPending = main.filter(item => item.review_status !== 'pending');
+      const expectedCount = confirmedNonPending.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+      const actualCount = confirmedNonPending.filter(item => item.arrived).reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+      expected += expectedCount * CATEGORY_PRICE[typeId];
+      actual += actualCount * CATEGORY_PRICE[typeId];
+    });
+
+    setFeeSummary({ expected, actual });
+  };
+
+  // 🆕 匯出全部記帳紀錄成 CSV（可用 Excel 開啟）
+  // 🆕 抓取所有出現過的月份（供月份報表下拉選單使用），date_key 格式為 MM/DD
+  const fetchAvailableExportMonths = async () => {
+    const { data: extraRecords } = await supabase.from('financial_records').select('date_key');
+    const { data: allRegs } = await supabase.from('pickleball_registrations').select('session_id');
+    const regDates = (allRegs || []).map(r => r.session_id.split('_')[0]);
+    const finDates = (extraRecords || []).map(r => r.date_key);
+    const months = Array.from(new Set([...regDates, ...finDates].map(d => d.split('/')[1]))).sort();
+
+    if (!months.includes(currentMonthStr)) months.push(currentMonthStr);
+    months.sort();
+
+    setAvailableExportMonths(months);
+  };
+
+  const handleExportFinancialCSV = async () => {
+    const { data: extraRecordsAll } = await supabase.from('financial_records').select('*').order('date_key', { ascending: true });
+
+    // 🆕 找出有記帳紀錄、或有報名紀錄的所有日期，只保留選定月份，逐一計算當天的報名費收入
+    const { data: allRegs } = await supabase.from('pickleball_registrations').select('session_id');
+    const regDateSet = new Set((allRegs || []).map(r => r.session_id.split('_')[0]));
+    const finDateSet = new Set((extraRecordsAll || []).map(r => r.date_key));
+    const allDates = Array.from(new Set([...regDateSet, ...finDateSet]))
+      .filter(d => d.split('/')[1] === selectedExportMonth)
+      .sort();
+
+    const extraRecords = (extraRecordsAll || []).filter(r => r.date_key.split('/')[1] === selectedExportMonth);
+
+    if (allDates.length === 0) {
+      alert(`【${selectedExportMonth}月】目前尚無任何報名或記帳紀錄！`);
       return;
     }
 
     let csvContent = '\uFEFF'; // BOM，讓 Excel 正確顯示中文
-    csvContent += '七賢匹克球團 星期六場次 收支記帳報表\n\n';
+    csvContent += `七賢匹克球團 星期六場次【${selectedExportMonth}月】收支記帳報表\n\n`;
+    csvContent += '日期,預計報名費收入,實收報名費(已到場),現場其他收入,現場支出,當日純益\n';
+
+    let grandExpected = 0;
+    let grandActual = 0;
+    let grandExtraIncome = 0;
+    let grandExpense = 0;
+
+    for (const dateKey of allDates) {
+      const capacity = await fetchCapacityForDate(dateKey);
+      const sessionIds = TYPE_ORDER.map(typeId => `${dateKey}_${typeId}`);
+      const { data: dayRegs } = await supabase
+        .from('pickleball_registrations')
+        .select('id, name, count, session_id, arrived, review_status')
+        .in('session_id', sessionIds);
+
+      const grouped = { experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] };
+      (dayRegs || []).forEach(item => {
+        const typeId = item.session_id.replace(`${dateKey}_`, '');
+        if (grouped[typeId]) grouped[typeId].push(item);
+      });
+
+      let expected = 0;
+      let actual = 0;
+      TYPE_ORDER.forEach(typeId => {
+        const maxSeats = capacity[typeId];
+        const { main } = splitMainAndWaitList(grouped[typeId], maxSeats);
+        const confirmedNonPending = main.filter(item => item.review_status !== 'pending');
+        expected += confirmedNonPending.reduce((sum, item) => sum + (Number(item.count) || 0), 0) * CATEGORY_PRICE[typeId];
+        actual += confirmedNonPending.filter(item => item.arrived).reduce((sum, item) => sum + (Number(item.count) || 0), 0) * CATEGORY_PRICE[typeId];
+      });
+
+      const dayExtra = (extraRecords || []).filter(r => r.date_key === dateKey);
+      const dayExtraIncome = dayExtra.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
+      const dayExpense = dayExtra.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
+      const dayProfit = actual + dayExtraIncome - dayExpense;
+
+      grandExpected += expected;
+      grandActual += actual;
+      grandExtraIncome += dayExtraIncome;
+      grandExpense += dayExpense;
+
+      csvContent += `${dateKey},$${expected},$${actual},$${dayExtraIncome},$${dayExpense},$${dayProfit}\n`;
+    }
+
+    csvContent += `\n${selectedExportMonth}月加總,,,,,\n`;
+    csvContent += `總預計報名費: $${grandExpected},總實收報名費: $${grandActual},總其他收入: $${grandExtraIncome},總支出: $${grandExpense},總純益: $${grandActual + grandExtraIncome - grandExpense}\n\n`;
+
+    csvContent += '【現場其他收支明細】\n';
     csvContent += '日期,類型,類別,金額,備註\n';
-
-    let totalIncome = 0;
-    let totalExpense = 0;
-
-    data.forEach(r => {
+    (extraRecords || []).forEach(r => {
       csvContent += `${r.date_key},${r.type === 'income' ? '收入' : '支出'},${r.category},$${r.amount},${r.note || ''}\n`;
-      if (r.type === 'income') totalIncome += r.amount;
-      else totalExpense += r.amount;
     });
-
-    csvContent += `\n總計,,,,\n`;
-    csvContent += `總收入: $${totalIncome},總支出: $${totalExpense},淨利: $${totalIncome - totalExpense},,\n`;
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `七賢匹克球_星期六場_記帳報表.csv`);
+    link.setAttribute('download', `七賢匹克球_星期六場_${selectedExportMonth}月_記帳報表.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -493,6 +601,8 @@ export default function Home() {
       setSettingsDateKey(activeDate); // 🆕 重設設定面板回到目前開放中的週次
       fetchSettingsPanelCapacity(activeDate); // 🆕
       fetchFinancialRecords(activeDate); // 🆕
+      computeRegistrationFeeSummary(activeDate); // 🆕
+      fetchAvailableExportMonths(); // 🆕
     } else {
       alert('❌ 管理員暗號錯誤！');
       setAdminPin('');
@@ -559,6 +669,7 @@ export default function Home() {
       return;
     }
     fetchAllZoneLists();
+    if (settingsDateKey === activeDate) computeRegistrationFeeSummary(activeDate); // 🆕
   };
 
   // 🆕 幹部權限直接刪除報名（不需要球友的取消密碼）
@@ -566,6 +677,7 @@ export default function Home() {
     if (!confirm(`幹部權限：確定要刪除「${item.name}」的報名？`)) return;
     await supabase.from('pickleball_registrations').delete().eq('id', item.id);
     fetchAllZoneLists();
+    if (settingsDateKey === activeDate) computeRegistrationFeeSummary(activeDate); // 🆕
   };
 
   // 🆕 核准報名：改為 approved，並加入白名單，之後報名都不用再審
@@ -583,6 +695,7 @@ export default function Home() {
     fetchPendingList();
     refreshData();
     fetchAllZoneLists(); // 🆕
+    computeRegistrationFeeSummary(settingsDateKey); // 🆕
   };
 
   // 🆕 拒絕報名：直接刪除該筆
@@ -593,6 +706,7 @@ export default function Home() {
     fetchPendingList();
     refreshData();
     fetchAllZoneLists(); // 🆕
+    computeRegistrationFeeSummary(settingsDateKey); // 🆕
   };
 
   // 🆕 手動停權 30 天
@@ -692,7 +806,7 @@ export default function Home() {
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
     const currentTimeValue = currentHours * 100 + currentMinutes;
-    const todayStr = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+    const todayStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
 
     // 🆕 依分區的截止時間判斷（早上三區 8:30 截止；晚上散打 18:30 截止）
     const timing = SESSION_TIMING[selectedType];
@@ -1104,6 +1218,7 @@ export default function Home() {
                             setSettingsDateKey(newDate);
                             fetchSettingsPanelCapacity(newDate);
                             fetchFinancialRecords(newDate); // 🆕
+                            computeRegistrationFeeSummary(newDate); // 🆕
                           }}
                           className="bg-slate-50 border p-1.5 rounded-lg font-bold text-xs"
                         >
@@ -1133,13 +1248,54 @@ export default function Home() {
                       </button>
                     </div>
 
-                    {/* 🆕 現場收支記帳（跟人數設定共用同一個日期選單） */}
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
+                    {/* 🆕 現場收支記帳與結算（跟人數設定共用同一個日期選單），樣式比照主後台 */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-black text-slate-600">🧾 現場收支記帳（{settingsDateKey}）</div>
-                        <button onClick={handleExportFinancialCSV} className="text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg">
-                          📊 匯出全部記帳報表(CSV)
-                        </button>
+                        <div className="text-sm font-black text-slate-600">🧾 現場收支記帳與結算（{settingsDateKey}）</div>
+                        <div className="flex items-center gap-2 bg-emerald-50 p-1.5 rounded-xl border border-emerald-200">
+                          <span className="text-emerald-900 font-bold text-xs pl-1">月份報表：</span>
+                          <select
+                            value={selectedExportMonth}
+                            onChange={e => setSelectedExportMonth(e.target.value)}
+                            className="bg-white border p-1.5 rounded-lg font-bold text-emerald-900 text-xs focus:outline-none"
+                          >
+                            {availableExportMonths.map(m => (
+                              <option key={m} value={m}>{m} 月</option>
+                            ))}
+                          </select>
+                          <button onClick={handleExportFinancialCSV} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xs">
+                            📊 匯出月記帳報表
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 🆕 4 張總覽卡片：報名費收入即時計算，不用手動觸發 */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase">預計報名費收入</div>
+                          <div className="text-lg font-black text-slate-800">${feeSummary.expected}</div>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase">總實收(已到場+其他)</div>
+                          <div className="text-lg font-black text-emerald-600">
+                            ${feeSummary.actual + financialRecords.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0)}
+                          </div>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase">總支出(場租+其他)</div>
+                          <div className="text-lg font-black text-rose-600">
+                            ${financialRecords.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0)}
+                          </div>
+                        </div>
+                        <div className="bg-emerald-50 p-3 rounded-xl border-2 border-emerald-300 text-center">
+                          <div className="text-[10px] font-bold text-emerald-700 uppercase">當日純益</div>
+                          <div className="text-lg font-black text-emerald-700">
+                            $
+                            {feeSummary.actual +
+                              financialRecords.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0) -
+                              financialRecords.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0)}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2 items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -1148,12 +1304,12 @@ export default function Home() {
                           onChange={e => {
                             const t = e.target.value;
                             setFinType(t);
-                            setFinCategory(t === 'income' ? '報名費' : '場地費');
+                            setFinCategory(t === 'income' ? '租拍' : '場地費');
                           }}
                           className="p-2 border rounded-lg font-bold bg-white text-sm"
                         >
-                          <option value="income">➕ 收入</option>
-                          <option value="expense">➖ 支出</option>
+                          <option value="income">➕ 增加收入</option>
+                          <option value="expense">➖ 增加支出</option>
                         </select>
 
                         <select
@@ -1163,9 +1319,9 @@ export default function Home() {
                         >
                           {finType === 'income' ? (
                             <>
-                              <option value="報名費">🎟️ 報名費</option>
                               <option value="租拍">🏸 租拍</option>
                               <option value="配件收入">🛍️ 配件收入</option>
+                              <option value="現場報名費">🎟️ 現場報名費(手動補登)</option>
                             </>
                           ) : (
                             <>
@@ -1188,19 +1344,20 @@ export default function Home() {
 
                         <input
                           type="text"
-                          placeholder="備註"
+                          placeholder="備註(例如：小明租拍、賣球拍/握把布)"
                           value={finNote}
                           onChange={e => setFinNote(e.target.value)}
                           className="flex-1 min-w-[100px] bg-white border p-2 rounded-lg font-bold text-sm outline-none"
                         />
 
                         <button onClick={handleAddFinancialRecord} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-sm">
-                          新增
+                          新增記帳
                         </button>
                       </div>
 
                       {financialRecords.length > 0 && (
                         <div className="space-y-2">
+                          <span className="text-xs font-bold text-slate-400 uppercase">當日現場附加明細：</span>
                           {financialRecords.map(r => (
                             <div key={r.id} className="bg-slate-50 p-2.5 rounded-lg border flex justify-between items-center">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -1215,11 +1372,6 @@ export default function Home() {
                               </button>
                             </div>
                           ))}
-                          <div className="text-right text-sm font-black text-slate-700 pt-1">
-                            當日淨利：$
-                            {financialRecords.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0) -
-                              financialRecords.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0)}
-                          </div>
                         </div>
                       )}
                     </div>
