@@ -167,10 +167,18 @@ export default function Home() {
     fetchOpenAt();
   }, []);
 
+  // 🆕 把 UTC 時間戳記轉換成 datetime-local 輸入框需要的「本地時間」格式，
+  //    修正之前用 toISOString() 直接切字串會變成 UTC 時間、導致畫面顯示跟本地時間差了時區offset的bug
+  const formatDateTimeLocal = (isoString) => {
+    const d = new Date(isoString);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   const fetchOpenAt = async () => {
     const { data } = await supabase.from('site_settings').select('open_at').eq('id', 1).maybeSingle();
     setOpenAt(data?.open_at || null);
-    setOpenAtInput(data?.open_at ? new Date(data.open_at).toISOString().slice(0, 16) : '');
+    setOpenAtInput(data?.open_at ? formatDateTimeLocal(data.open_at) : '');
   };
 
   // 🆕 管理員儲存會員限定設定：密碼欄位留空代表「不變更密碼」，只更新開放時間
