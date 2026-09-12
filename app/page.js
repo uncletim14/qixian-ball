@@ -156,10 +156,10 @@ export default function Home() {
   // 🆕 即時計算的報名費收入（不寫進 financial_records，每次都重新算，永遠準確不會重複計算）
   const [feeSummary, setFeeSummary] = useState({ expected: 0, actual: 0 });
 
-  // 🆕 月份報表篩選（因為 date_key 格式是 MM/DD 沒有年份，先以月份分組篩選）
-  const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
-  const [selectedExportMonth, setSelectedExportMonth] = useState(currentMonthStr);
-  const [availableExportMonths, setAvailableExportMonths] = useState([currentMonthStr]);
+  // 🆕 月份報表篩選：改用「年+月」組合（YYYY/MM）篩選，避免跨年後同月份資料被混在一起
+  const currentYearMonthStr = `${new Date().getFullYear()}/${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  const [selectedExportMonth, setSelectedExportMonth] = useState(currentYearMonthStr);
+  const [availableExportMonths, setAvailableExportMonths] = useState([currentYearMonthStr]);
 
   // 🆕 管理員模式：報名審核清單
   const [pendingList, setPendingList] = useState([]);
@@ -463,40 +463,40 @@ export default function Home() {
   };
 
   // 🆕 匯出全部記帳紀錄成 CSV（可用 Excel 開啟）
-  // 🆕 抓取所有出現過的月份（供月份報表下拉選單使用），date_key 格式為 MM/DD
+  // 🆕 抓取所有出現過的「年/月」組合（供月份報表下拉選單使用），date_key 格式為 YYYY/MM/DD
   const fetchAvailableExportMonths = async () => {
     const { data: extraRecords } = await supabase.from('financial_records').select('date_key');
     const { data: allRegs } = await supabase.from('pickleball_registrations').select('session_id');
     const regDates = (allRegs || []).map(r => r.session_id.split('_')[0]);
     const finDates = (extraRecords || []).map(r => r.date_key);
-    const months = Array.from(new Set([...regDates, ...finDates].map(d => d.split('/')[1]))).sort();
+    const yearMonths = Array.from(new Set([...regDates, ...finDates].map(d => d.split('/').slice(0, 2).join('/')))).sort();
 
-    if (!months.includes(currentMonthStr)) months.push(currentMonthStr);
-    months.sort();
+    if (!yearMonths.includes(currentYearMonthStr)) yearMonths.push(currentYearMonthStr);
+    yearMonths.sort();
 
-    setAvailableExportMonths(months);
+    setAvailableExportMonths(yearMonths);
   };
 
   const handleExportFinancialCSV = async () => {
     const { data: extraRecordsAll } = await supabase.from('financial_records').select('*').order('date_key', { ascending: true });
 
-    // 🆕 找出有記帳紀錄、或有報名紀錄的所有日期，只保留選定月份，逐一計算當天的報名費收入
+    // 🆕 找出有記帳紀錄、或有報名紀錄的所有日期，只保留選定「年/月」，逐一計算當天的報名費收入
     const { data: allRegs } = await supabase.from('pickleball_registrations').select('session_id');
     const regDateSet = new Set((allRegs || []).map(r => r.session_id.split('_')[0]));
     const finDateSet = new Set((extraRecordsAll || []).map(r => r.date_key));
     const allDates = Array.from(new Set([...regDateSet, ...finDateSet]))
-      .filter(d => d.split('/')[1] === selectedExportMonth)
+      .filter(d => d.split('/').slice(0, 2).join('/') === selectedExportMonth)
       .sort();
 
-    const extraRecords = (extraRecordsAll || []).filter(r => r.date_key.split('/')[1] === selectedExportMonth);
+    const extraRecords = (extraRecordsAll || []).filter(r => r.date_key.split('/').slice(0, 2).join('/') === selectedExportMonth);
 
     if (allDates.length === 0) {
-      alert(`【${selectedExportMonth}月】目前尚無任何報名或記帳紀錄！`);
+      alert(`【${selectedExportMonth}】目前尚無任何報名或記帳紀錄！`);
       return;
     }
 
     let csvContent = '\uFEFF'; // BOM，讓 Excel 正確顯示中文
-    csvContent += `七賢匹克球團 星期六場次【${selectedExportMonth}月】收支記帳報表\n\n`;
+    csvContent += `七賢匹克球團 星期六場次【${selectedExportMonth}】收支記帳報表\n\n`;
     csvContent += '日期,預計報名費收入,實收報名費(已到場),現場其他收入,現場支出,當日純益\n';
 
     let grandExpected = 0;
@@ -541,7 +541,7 @@ export default function Home() {
       csvContent += `${dateKey},$${expected},$${actual},$${dayExtraIncome},$${dayExpense},$${dayProfit}\n`;
     }
 
-    csvContent += `\n${selectedExportMonth}月加總,,,,,\n`;
+    csvContent += `\n${selectedExportMonth}加總,,,,,\n`;
     csvContent += `總預計報名費: $${grandExpected},總實收報名費: $${grandActual},總其他收入: $${grandExtraIncome},總支出: $${grandExpense},總純益: $${grandActual + grandExtraIncome - grandExpense}\n\n`;
 
     csvContent += '【現場其他收支明細】\n';
@@ -554,7 +554,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `七賢匹克球_星期六場_${selectedExportMonth}月_記帳報表.csv`);
+    link.setAttribute('download', `七賢匹克球_星期六場_${selectedExportMonth.replace('/', '-')}_記帳報表.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1259,9 +1259,10 @@ export default function Home() {
                             onChange={e => setSelectedExportMonth(e.target.value)}
                             className="bg-white border p-1.5 rounded-lg font-bold text-emerald-900 text-xs focus:outline-none"
                           >
-                            {availableExportMonths.map(m => (
-                              <option key={m} value={m}>{m} 月</option>
-                            ))}
+                            {availableExportMonths.map(m => {
+                              const [y, mo] = m.split('/');
+                              return <option key={m} value={m}>{y}年{mo}月</option>;
+                            })}
                           </select>
                           <button onClick={handleExportFinancialCSV} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xs">
                             📊 匯出月記帳報表
