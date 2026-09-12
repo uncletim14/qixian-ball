@@ -120,6 +120,15 @@ export default function Home() {
   const [checkInPassword, setCheckInPassword] = useState('');
   const [userWarning, setUserWarning] = useState('');
 
+  // 🆕 會員限定報名模式：openAt 之前需要輸入會員密碼才能報名，openAt 之後自動開放給所有人
+  const [openAt, setOpenAt] = useState(null); // 只存自動開放時間，絕不把密碼抓到前端
+  const [membersPassword, setMembersPassword] = useState(''); // 使用者在表單輸入的密碼
+  const isMembersOnlyActive = openAt ? new Date() < new Date(openAt) : false;
+
+  // 🆕 管理員面板用：設定會員限定的自動開放時間 + (可選)更新密碼
+  const [openAtInput, setOpenAtInput] = useState('');
+  const [membersOnlyPasswordInput, setMembersOnlyPasswordInput] = useState('');
+
   // 🆕 因雨取消狀態（以日期本身為 key，整天生效，不分區域）
   const [isCancelled, setIsCancelled] = useState(false);
 
@@ -152,6 +161,50 @@ export default function Home() {
       }
     }
   }, []);
+
+  // 🆕 掛載時抓取「自動開放時間」，注意：絕對不 select 密碼欄位，避免密碼被傳到每個訪客的瀏覽器
+  useEffect(() => {
+    fetchOpenAt();
+  }, []);
+
+  const fetchOpenAt = async () => {
+    const { data } = await supabase.from('site_settings').select('open_at').eq('id', 1).maybeSingle();
+    setOpenAt(data?.open_at || null);
+    setOpenAtInput(data?.open_at ? new Date(data.open_at).toISOString().slice(0, 16) : '');
+  };
+
+  // 🆕 管理員儲存會員限定設定：密碼欄位留空代表「不變更密碼」，只更新開放時間
+  const handleSaveMembersOnlySettings = async () => {
+    const payload = {
+      id: 1,
+      open_at: openAtInput ? new Date(openAtInput).toISOString() : null
+    };
+    if (membersOnlyPasswordInput.trim() !== '') {
+      payload.members_only_password = membersOnlyPasswordInput.trim();
+    }
+
+    const { error } = await supabase.from('site_settings').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      alert(`儲存失敗：${error.message}`);
+      return;
+    }
+
+    alert('🎉 已儲存會員限定設定！');
+    setMembersOnlyPasswordInput('');
+    fetchOpenAt();
+  };
+
+  // 🆕 立即開放：把開放時間設成現在，馬上解除會員限定
+  const handleOpenNow = async () => {
+    if (!confirm('確定要立即解除會員限定、開放給所有人報名嗎？')) return;
+    const { error } = await supabase.from('site_settings').upsert({ id: 1, open_at: new Date().toISOString() }, { onConflict: 'id' });
+    if (error) {
+      alert(`操作失敗：${error.message}`);
+      return;
+    }
+    alert('🎉 已立即開放給所有人！');
+    fetchOpenAt();
+  };
 
   // 🆕 自助報到模式需要涵蓋全部分區（含晚上散打），所以要抓取全區名單
   useEffect(() => {
@@ -515,6 +568,32 @@ export default function Home() {
       return;
     }
 
+    // 🆕 會員限定模式檢查：開放時間之前，必須輸入正確的會員密碼才能報名
+    //    密碼驗證用資料庫查詢條件比對（伺服器端比對），密碼本身不會被抓到前端
+    if (isMembersOnlyActive) {
+      if (!membersPassword.trim()) {
+        alert('🔒 目前為會員限定報名期間，請輸入會員密碼！');
+        return;
+      }
+
+      const { data: matched, error: pwdError } = await supabase
+        .from('site_settings')
+        .select('id')
+        .eq('id', 1)
+        .eq('members_only_password', membersPassword.trim())
+        .maybeSingle();
+
+      if (pwdError) {
+        alert('系統錯誤：' + pwdError.message);
+        return;
+      }
+
+      if (!matched) {
+        alert('🔒 會員密碼錯誤，請確認後再試一次！');
+        return;
+      }
+    }
+
     const now = new Date();
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
@@ -574,6 +653,7 @@ export default function Home() {
         alert('🎉 登記成功！');
       }
       setForm({ name: '', count: '1', password: '' });
+      setMembersPassword('');
       setUserWarning('');
       refreshData();
     }
@@ -757,6 +837,13 @@ export default function Home() {
             )}
           </div>
 
+          {/* 🆕 會員限定期間提示（非管理員模式時顯示） */}
+          {!isCheckInMode && !isSelfCheckIn && isMembersOnlyActive && (
+            <div className="mt-4 bg-amber-500/10 border-2 border-amber-400 text-amber-700 rounded-2xl px-4 py-3 font-black text-sm sm:text-lg">
+              🔒 目前為會員限定報名期間，需輸入會員密碼才能報名，開放時間到後將自動開放給所有人
+            </div>
+          )}
+
           {/* 🆕 因雨取消狀態提示（非管理員模式時顯示） */}
           {!isCheckInMode && !isSelfCheckIn && isCancelled && (
             <div className="mt-4 bg-red-500/10 border-2 border-red-400 text-red-600 rounded-2xl px-4 py-3 font-black text-sm sm:text-lg">
@@ -869,6 +956,48 @@ export default function Home() {
                     >
                       {isCancelled ? '⛈️ 因雨取消中（點擊恢復正常）' : '🟢 球敘正常（點擊設為因雨取消）'}
                     </button>
+
+                    {/* 🆕 會員限定報名設定 */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
+                      <div className="text-sm font-black text-slate-600">
+                        🔒 會員限定報名設定
+                        {isMembersOnlyActive ? (
+                          <span className="ml-2 text-xs font-bold text-amber-600">目前生效中</span>
+                        ) : (
+                          <span className="ml-2 text-xs font-bold text-emerald-600">目前未限制（公開報名中）</span>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500">自動開放時間（此時間之後任何人都能直接報名）</label>
+                        <input
+                          type="datetime-local"
+                          value={openAtInput}
+                          onChange={e => setOpenAtInput(e.target.value)}
+                          className="w-full bg-slate-50 border p-2 rounded-lg font-bold text-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500">會員密碼（留空 = 不變更密碼）</label>
+                        <input
+                          type="text"
+                          placeholder="設定/更新會員限定密碼"
+                          value={membersOnlyPasswordInput}
+                          onChange={e => setMembersOnlyPasswordInput(e.target.value)}
+                          className="w-full bg-slate-50 border p-2 rounded-lg font-bold text-sm"
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button onClick={handleSaveMembersOnlySettings} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-black py-2.5 rounded-xl text-sm">
+                          儲存設定
+                        </button>
+                        <button onClick={handleOpenNow} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-sm">
+                          立即開放
+                        </button>
+                      </div>
+                    </div>
 
                     {/* 🆕 人數上限設定 */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
@@ -1103,6 +1232,21 @@ export default function Home() {
                         onChange={e => setHoneypot(e.target.value)}
                       />
                     </div>
+                    {/* 🆕 會員限定模式提示與密碼輸入欄位 */}
+                    {isMembersOnlyActive && (
+                      <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 space-y-2">
+                        <p className="text-amber-800 font-black text-sm">
+                          🔒 目前為會員限定報名期間，請輸入會員密碼才能送出報名
+                        </p>
+                        <input
+                          className="w-full p-4 bg-white rounded-2xl border-2 border-amber-300 text-xl focus:outline-none focus:border-amber-500 text-center tracking-widest"
+                          type="password"
+                          placeholder="請輸入會員密碼"
+                          value={membersPassword}
+                          onChange={e => setMembersPassword(e.target.value)}
+                        />
+                      </div>
+                    )}
                     <div>
                       <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                       {userWarning && (
