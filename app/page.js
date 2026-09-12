@@ -59,12 +59,12 @@ function getUpcomingSaturdayDates(count) {
 
 // 🆕 六個分區設定（新增「新手體驗(晚上)」，人數上限可在管理員模式調整，這裡只留單筆報名限制與顯示用文字）
 const TYPE_CONFIG = {
-  experience: { label: '新手體驗', perSubmitMax: 1 },
-  normal: { label: '新手區', perSubmitMax: 2 },
-  openplay: { label: '一般散打(2.0以上)', perSubmitMax: 2 },
-  experience_pm: { label: '新手體驗(晚上)', perSubmitMax: 1 },
-  normal_pm: { label: '新手區(晚上)', perSubmitMax: 2 },
-  openplay_pm: { label: '散打(晚上)', perSubmitMax: 2 }
+  experience: { label: '新手體驗', perSubmitMax: 4 },
+  normal: { label: '新手區', perSubmitMax: 4 },
+  openplay: { label: '一般散打(2.0以上)', perSubmitMax: 4 },
+  experience_pm: { label: '新手體驗(晚上)', perSubmitMax: 4 },
+  normal_pm: { label: '新手區(晚上)', perSubmitMax: 4 },
+  openplay_pm: { label: '散打(晚上)', perSubmitMax: 4 }
 };
 const TYPE_ORDER = ['experience', 'normal', 'openplay', 'experience_pm', 'normal_pm', 'openplay_pm'];
 // 🆕 早上/晚上時段各自包含的分區（給報名選單用；後台管理相關功能仍用 TYPE_ORDER 涵蓋全部6個分區）
