@@ -29,6 +29,34 @@ function getTargetSaturdayDateStr() {
   return `${mm}/${dd}`;
 }
 
+// 🆕 產生未來一個月內（含目前這個目標星期六）所有星期六的日期清單，
+//    供「人數上限設定」面板選擇要預先設定哪一週，跟即時決定報名開放日的邏輯分開
+function getUpcomingSaturdayDates(count) {
+  const now = new Date();
+  const currentDay = now.getDay();
+  const currentTimeInMinutes = now.getHours() * 60 + now.getMinutes();
+  const rolloverTimeInMinutes = 22 * 60;
+
+  const daysUntilSaturday = (6 - currentDay + 7) % 7;
+  let isNextWeek = false;
+  if (currentDay === 6 && currentTimeInMinutes >= rolloverTimeInMinutes) {
+    isNextWeek = true;
+  }
+
+  const firstTarget = new Date(now);
+  firstTarget.setDate(now.getDate() + daysUntilSaturday + (isNextWeek ? 7 : 0));
+
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(firstTarget);
+    d.setDate(firstTarget.getDate() + i * 7);
+    const mm2 = String(d.getMonth() + 1).padStart(2, '0');
+    const dd2 = String(d.getDate()).padStart(2, '0');
+    result.push(`${mm2}/${dd2}`);
+  }
+  return result;
+}
+
 // 🆕 六個分區設定（新增「新手體驗(晚上)」，人數上限可在管理員模式調整，這裡只留單筆報名限制與顯示用文字）
 const TYPE_CONFIG = {
   experience: { label: '新手體驗', perSubmitMax: 1 },
@@ -95,9 +123,14 @@ export default function Home() {
   // 🆕 因雨取消狀態（以日期本身為 key，整天生效，不分區域）
   const [isCancelled, setIsCancelled] = useState(false);
 
-  // 🆕 三個分區的人數上限（可在管理員模式調整，依日期各自獨立存放）
+  // 🆕 六個分區的人數上限（即時生效，跟著 activeDate 走，用於實際報名判斷）
   const [capacitySettings, setCapacitySettings] = useState(DEFAULT_CAPACITY);
+
+  // 🆕 「人數上限設定」面板專用：可瀏覽/編輯未來一個月內任一個星期六，
+  //    跟上面「即時生效」的 capacitySettings 分開，避免瀏覽其他週時誤動到目前開放中的場次
+  const [settingsDateKey, setSettingsDateKey] = useState(activeDate);
   const [capacityInputs, setCapacityInputs] = useState(DEFAULT_CAPACITY);
+  const upcomingSaturdaysForSettings = getUpcomingSaturdayDates(5);
 
   // 🆕 管理員模式：報名審核清單
   const [pendingList, setPendingList] = useState([]);
@@ -106,7 +139,7 @@ export default function Home() {
   const [blacklistEntries, setBlacklistEntries] = useState([]);
 
   // 🆕 管理員模式：全區名單（同時顯示三個分區的名單，不用切換分頁）
-  const [zoneLists, setZoneLists] = useState({ experience: [], normal: [], openplay: [] });
+  const [zoneLists, setZoneLists] = useState({ experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] });
   // 🆕 全區名單管理的分頁篩選（ALL / experience / normal / openplay）
   const [adminCategoryFilter, setAdminCategoryFilter] = useState('ALL');
 
@@ -222,10 +255,22 @@ export default function Home() {
     setIsCancelled(data?.is_cancelled || false);
   };
 
-  // 🆕 讀取本場次三個分區的人數上限設定，沒有設定過就用預設值
+  // 🆕 讀取「目前開放報名的這個星期六」六個分區的人數上限，即時生效用，沒有設定過就用預設值
   const fetchCapacitySettings = async () => {
-    const { data } = await supabase.from('event_settings').select('*').eq('date_key', activeDate).maybeSingle();
-    const settings = {
+    const settings = await fetchCapacityForDate(activeDate);
+    setCapacitySettings(settings);
+  };
+
+  // 🆕 讀取「設定面板」目前選擇瀏覽的那個星期六的人數上限，純供編輯顯示用，不影響即時生效的 capacitySettings
+  const fetchSettingsPanelCapacity = async (dateKey) => {
+    const settings = await fetchCapacityForDate(dateKey);
+    setCapacityInputs(settings);
+  };
+
+  // 🆕 共用的查詢邏輯
+  const fetchCapacityForDate = async (dateKey) => {
+    const { data } = await supabase.from('event_settings').select('*').eq('date_key', dateKey).maybeSingle();
+    return {
       experience: data?.experience_max ?? DEFAULT_CAPACITY.experience,
       normal: data?.normal_max ?? DEFAULT_CAPACITY.normal,
       openplay: data?.openplay_max ?? DEFAULT_CAPACITY.openplay,
@@ -233,14 +278,13 @@ export default function Home() {
       normal_pm: data?.normal_pm_max ?? DEFAULT_CAPACITY.normal_pm,
       openplay_pm: data?.openplay_pm_max ?? DEFAULT_CAPACITY.openplay_pm
     };
-    setCapacitySettings(settings);
-    setCapacityInputs(settings);
   };
 
-  // 🆕 儲存人數上限設定（管理員用）
+  // 🆕 儲存人數上限設定（管理員用）：儲存到「設定面板目前選擇瀏覽」的那個星期六，
+  //    如果剛好就是目前正在開放報名的那一週，同步更新即時生效的 capacitySettings
   const handleSaveCapacitySettings = async () => {
     const { error } = await supabase.from('event_settings').upsert({
-      date_key: activeDate,
+      date_key: settingsDateKey,
       experience_max: parseInt(capacityInputs.experience) || 0,
       normal_max: parseInt(capacityInputs.normal) || 0,
       openplay_max: parseInt(capacityInputs.openplay) || 0,
@@ -254,8 +298,12 @@ export default function Home() {
       return;
     }
 
-    alert(`🎉 已儲存【${activeDate}】場次的人數設定！`);
-    setCapacitySettings({ ...capacityInputs });
+    alert(`🎉 已儲存【${settingsDateKey}】場次的人數設定！`);
+    // 🆕 只有編輯的正是「目前開放報名中」的那個星期六，才同步更新即時生效的 capacitySettings；
+    //    編輯未來週次的設定，先存進資料庫，等到那一週真正變成 activeDate 時會自動讀取生效
+    if (settingsDateKey === activeDate) {
+      setCapacitySettings({ ...capacityInputs });
+    }
   };
 
   // 🆕 依報名先後順序排隊佔位：pending（審核中）跟 approved（已審核）一起排，
@@ -296,6 +344,8 @@ export default function Home() {
       fetchPendingList();
       fetchBlacklistEntries();
       fetchAllZoneLists(); // 🆕
+      setSettingsDateKey(activeDate); // 🆕 重設設定面板回到目前開放中的週次
+      fetchSettingsPanelCapacity(activeDate); // 🆕
     } else {
       alert('❌ 管理員暗號錯誤！');
       setAdminPin('');
@@ -345,7 +395,7 @@ export default function Home() {
       .in('session_id', sessionIds)
       .order('created_at', { ascending: true });
 
-    const grouped = { experience: [], normal: [], openplay: [] };
+    const grouped = { experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] };
     (data || []).forEach(item => {
       const typeId = item.session_id.replace(`${activeDate}_`, '');
       if (grouped[typeId]) grouped[typeId].push(item);
@@ -822,7 +872,24 @@ export default function Home() {
 
                     {/* 🆕 人數上限設定 */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
-                      <div className="text-sm font-black text-slate-600">⚙️ 設定【{activeDate}】六個分區人數上限</div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-black text-slate-600">⚙️ 設定六個分區人數上限</div>
+                        <select
+                          value={settingsDateKey}
+                          onChange={e => {
+                            const newDate = e.target.value;
+                            setSettingsDateKey(newDate);
+                            fetchSettingsPanelCapacity(newDate);
+                          }}
+                          className="bg-slate-50 border p-1.5 rounded-lg font-bold text-xs"
+                        >
+                          {upcomingSaturdaysForSettings.map(dateStr => (
+                            <option key={dateStr} value={dateStr}>
+                              {dateStr}（週六）{dateStr === activeDate ? ' - 目前開放中' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {TYPE_ORDER.map(typeId => (
                           <div key={typeId} className="flex flex-col items-center gap-1 bg-slate-50 p-2 rounded-xl">
@@ -838,7 +905,7 @@ export default function Home() {
                         ))}
                       </div>
                       <button onClick={handleSaveCapacitySettings} className="w-full bg-sky-600 hover:bg-sky-700 text-white font-black py-2.5 rounded-xl text-sm">
-                        儲存人數設定
+                        儲存【{settingsDateKey}】的人數設定
                       </button>
                     </div>
 
