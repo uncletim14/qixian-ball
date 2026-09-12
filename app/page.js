@@ -141,6 +141,13 @@ export default function Home() {
   const [capacityInputs, setCapacityInputs] = useState(DEFAULT_CAPACITY);
   const upcomingSaturdaysForSettings = getUpcomingSaturdayDates(5);
 
+  // 🆕 現場收支記帳（跟人數設定共用 settingsDateKey 這個日期選單）
+  const [financialRecords, setFinancialRecords] = useState([]);
+  const [finType, setFinType] = useState('income');
+  const [finCategory, setFinCategory] = useState('報名費');
+  const [finAmount, setFinAmount] = useState('');
+  const [finNote, setFinNote] = useState('');
+
   // 🆕 管理員模式：報名審核清單
   const [pendingList, setPendingList] = useState([]);
 
@@ -367,6 +374,84 @@ export default function Home() {
     }
   };
 
+  // 🆕 抓取「設定面板目前選擇的日期」當天的記帳明細
+  const fetchFinancialRecords = async (dateKey) => {
+    const { data } = await supabase
+      .from('financial_records')
+      .select('*')
+      .eq('date_key', dateKey)
+      .order('created_at', { ascending: true });
+    setFinancialRecords(data || []);
+  };
+
+  // 🆕 新增一筆記帳
+  const handleAddFinancialRecord = async () => {
+    const amountNum = parseInt(finAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      alert('請輸入有效的金額！');
+      return;
+    }
+
+    const { error } = await supabase.from('financial_records').insert([{
+      date_key: settingsDateKey,
+      type: finType,
+      category: finCategory,
+      amount: amountNum,
+      note: finNote.trim()
+    }]);
+
+    if (error) {
+      alert(`新增失敗：${error.message}`);
+      return;
+    }
+
+    setFinAmount('');
+    setFinNote('');
+    fetchFinancialRecords(settingsDateKey);
+  };
+
+  // 🆕 刪除一筆記帳
+  const handleDeleteFinancialRecord = async (id) => {
+    if (!confirm('確定要刪除此筆記帳紀錄？')) return;
+    await supabase.from('financial_records').delete().eq('id', id);
+    fetchFinancialRecords(settingsDateKey);
+  };
+
+  // 🆕 匯出全部記帳紀錄成 CSV（可用 Excel 開啟）
+  const handleExportFinancialCSV = async () => {
+    const { data } = await supabase.from('financial_records').select('*').order('date_key', { ascending: true });
+
+    if (!data || data.length === 0) {
+      alert('目前尚無任何記帳紀錄！');
+      return;
+    }
+
+    let csvContent = '\uFEFF'; // BOM，讓 Excel 正確顯示中文
+    csvContent += '七賢匹克球團 星期六場次 收支記帳報表\n\n';
+    csvContent += '日期,類型,類別,金額,備註\n';
+
+    let totalIncome = 0;
+    let totalExpense = 0;
+
+    data.forEach(r => {
+      csvContent += `${r.date_key},${r.type === 'income' ? '收入' : '支出'},${r.category},$${r.amount},${r.note || ''}\n`;
+      if (r.type === 'income') totalIncome += r.amount;
+      else totalExpense += r.amount;
+    });
+
+    csvContent += `\n總計,,,,\n`;
+    csvContent += `總收入: $${totalIncome},總支出: $${totalExpense},淨利: $${totalIncome - totalExpense},,\n`;
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `七賢匹克球_星期六場_記帳報表.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // 🆕 依報名先後順序排隊佔位：pending（審核中）跟 approved（已審核）一起排，
   //    只是顯示標籤不同（審核中 vs 正取/備取），若審核中的人後續被拒絕會自動釋出名額
   // 🆕 修正插隊漏洞：一旦有人因為人數不足被擋到備取，後面所有人（即使人數少、剛好塞得進去）
@@ -407,6 +492,7 @@ export default function Home() {
       fetchAllZoneLists(); // 🆕
       setSettingsDateKey(activeDate); // 🆕 重設設定面板回到目前開放中的週次
       fetchSettingsPanelCapacity(activeDate); // 🆕
+      fetchFinancialRecords(activeDate); // 🆕
     } else {
       alert('❌ 管理員暗號錯誤！');
       setAdminPin('');
@@ -1017,6 +1103,7 @@ export default function Home() {
                             const newDate = e.target.value;
                             setSettingsDateKey(newDate);
                             fetchSettingsPanelCapacity(newDate);
+                            fetchFinancialRecords(newDate); // 🆕
                           }}
                           className="bg-slate-50 border p-1.5 rounded-lg font-bold text-xs"
                         >
@@ -1044,6 +1131,97 @@ export default function Home() {
                       <button onClick={handleSaveCapacitySettings} className="w-full bg-sky-600 hover:bg-sky-700 text-white font-black py-2.5 rounded-xl text-sm">
                         儲存【{settingsDateKey}】的人數設定
                       </button>
+                    </div>
+
+                    {/* 🆕 現場收支記帳（跟人數設定共用同一個日期選單） */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-black text-slate-600">🧾 現場收支記帳（{settingsDateKey}）</div>
+                        <button onClick={handleExportFinancialCSV} className="text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg">
+                          📊 匯出全部記帳報表(CSV)
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <select
+                          value={finType}
+                          onChange={e => {
+                            const t = e.target.value;
+                            setFinType(t);
+                            setFinCategory(t === 'income' ? '報名費' : '場地費');
+                          }}
+                          className="p-2 border rounded-lg font-bold bg-white text-sm"
+                        >
+                          <option value="income">➕ 收入</option>
+                          <option value="expense">➖ 支出</option>
+                        </select>
+
+                        <select
+                          value={finCategory}
+                          onChange={e => setFinCategory(e.target.value)}
+                          className="p-2 border rounded-lg font-bold bg-white text-sm"
+                        >
+                          {finType === 'income' ? (
+                            <>
+                              <option value="報名費">🎟️ 報名費</option>
+                              <option value="租拍">🏸 租拍</option>
+                              <option value="配件收入">🛍️ 配件收入</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value="場地費">🏟️ 場地費</option>
+                              <option value="其他支出">📦 其他支出</option>
+                            </>
+                          )}
+                        </select>
+
+                        <div className="flex items-center gap-1 bg-white border p-2 rounded-lg">
+                          <span className="font-bold text-slate-400 text-sm">$</span>
+                          <input
+                            type="number"
+                            placeholder="金額"
+                            value={finAmount}
+                            onChange={e => setFinAmount(e.target.value)}
+                            className="w-20 font-bold text-sm outline-none"
+                          />
+                        </div>
+
+                        <input
+                          type="text"
+                          placeholder="備註"
+                          value={finNote}
+                          onChange={e => setFinNote(e.target.value)}
+                          className="flex-1 min-w-[100px] bg-white border p-2 rounded-lg font-bold text-sm outline-none"
+                        />
+
+                        <button onClick={handleAddFinancialRecord} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-sm">
+                          新增
+                        </button>
+                      </div>
+
+                      {financialRecords.length > 0 && (
+                        <div className="space-y-2">
+                          {financialRecords.map(r => (
+                            <div key={r.id} className="bg-slate-50 p-2.5 rounded-lg border flex justify-between items-center">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${r.type === 'income' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                                  {r.category}
+                                </span>
+                                <span className="font-bold text-sm">${r.amount}</span>
+                                {r.note && <span className="text-xs text-slate-500">({r.note})</span>}
+                              </div>
+                              <button onClick={() => handleDeleteFinancialRecord(r.id)} className="text-xs font-bold text-slate-400 hover:text-rose-600 underline">
+                                刪除
+                              </button>
+                            </div>
+                          ))}
+                          <div className="text-right text-sm font-black text-slate-700 pt-1">
+                            當日淨利：$
+                            {financialRecords.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0) -
+                              financialRecords.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0)}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* 🆕 全區名單管理：跟主後台一樣的分頁籤 + 攤平列表風格 */}
