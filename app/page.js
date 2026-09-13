@@ -31,27 +31,20 @@ function getTargetSaturdayDateStr() {
   return `${yyyy}/${mm}/${dd}`;
 }
 
-// 🆕 產生未來一個月內（含目前這個目標星期六）所有星期六的日期清單，
-//    供「人數上限設定」面板選擇要預先設定哪一週，跟即時決定報名開放日的邏輯分開
-function getUpcomingSaturdayDates(count) {
+// 🆕 產生「過去 pastCount 週 + 未來 futureCount 週」的星期六日期清單，
+//    供管理員面板的「選擇單日場次」統一日期選單使用：可以回頭看過去的場次做簽到修正，
+//    也能預先設定未來週次，跟即時決定報名開放日(activeDate)的邏輯分開
+function getSaturdayDateRange(pastCount, futureCount) {
   const now = new Date();
   const currentDay = now.getDay();
-  const currentTimeInMinutes = now.getHours() * 60 + now.getMinutes();
-  const rolloverTimeInMinutes = 22 * 60;
-
-  const daysUntilSaturday = (6 - currentDay + 7) % 7;
-  let isNextWeek = false;
-  if (currentDay === 6 && currentTimeInMinutes >= rolloverTimeInMinutes) {
-    isNextWeek = true;
-  }
-
-  const firstTarget = new Date(now);
-  firstTarget.setDate(now.getDate() + daysUntilSaturday + (isNextWeek ? 7 : 0));
+  const daysUntilSaturday = (6 - currentDay + 7) % 7; // 今天就是週六則為0，否則算到本週六還有幾天
+  const anchorSaturday = new Date(now);
+  anchorSaturday.setDate(now.getDate() + daysUntilSaturday);
 
   const result = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(firstTarget);
-    d.setDate(firstTarget.getDate() + i * 7);
+  for (let i = -pastCount; i <= futureCount; i++) {
+    const d = new Date(anchorSaturday);
+    d.setDate(anchorSaturday.getDate() + i * 7);
     const yyyy2 = d.getFullYear();
     const mm2 = String(d.getMonth() + 1).padStart(2, '0');
     const dd2 = String(d.getDate()).padStart(2, '0');
@@ -144,7 +137,7 @@ export default function Home() {
   //    跟上面「即時生效」的 capacitySettings 分開，避免瀏覽其他週時誤動到目前開放中的場次
   const [settingsDateKey, setSettingsDateKey] = useState(activeDate);
   const [capacityInputs, setCapacityInputs] = useState(DEFAULT_CAPACITY);
-  const upcomingSaturdaysForSettings = getUpcomingSaturdayDates(5);
+  const upcomingSaturdaysForSettings = getSaturdayDateRange(2, 5);
 
   // 🆕 現場收支記帳（跟人數設定共用 settingsDateKey 這個日期選單）
   const [financialRecords, setFinancialRecords] = useState([]);
@@ -234,10 +227,10 @@ export default function Home() {
     fetchOpenAt();
   };
 
-  // 🆕 自助報到模式需要涵蓋全部分區（含晚上散打），所以要抓取全區名單
+  // 🆕 自助報到模式需要涵蓋全部分區（含晚上散打），所以要抓取全區名單（一律用「目前真正開放中」的 activeDate，不受管理員瀏覽日期影響）
   useEffect(() => {
     if (isSelfCheckIn) {
-      fetchAllZoneLists();
+      fetchAllZoneLists(activeDate);
     }
   }, [isSelfCheckIn, activeDate]);
 
@@ -597,8 +590,8 @@ export default function Home() {
       setIsAdminAuthenticated(true);
       fetchPendingList();
       fetchBlacklistEntries();
-      fetchAllZoneLists(); // 🆕
-      setSettingsDateKey(activeDate); // 🆕 重設設定面板回到目前開放中的週次
+      setSettingsDateKey(activeDate); // 🆕 重設統一日期選單回到目前開放中的週次
+      fetchAllZoneLists(activeDate); // 🆕
       fetchSettingsPanelCapacity(activeDate); // 🆕
       fetchFinancialRecords(activeDate); // 🆕
       computeRegistrationFeeSummary(activeDate); // 🆕
@@ -643,9 +636,10 @@ export default function Home() {
     return { main, wait };
   };
 
-  // 🆕 抓取三個分區的完整名單（管理員模式一次查看，不用切換分頁）
-  const fetchAllZoneLists = async () => {
-    const sessionIds = TYPE_ORDER.map(typeId => `${activeDate}_${typeId}`);
+  // 🆕 抓取指定日期六個分區的完整名單（管理員模式一次查看，不用切換分頁）
+  //    預設抓「選擇單日場次」目前選的那個日期，可以回頭修正過去場次的簽到狀況
+  const fetchAllZoneLists = async (dateKey = settingsDateKey) => {
+    const sessionIds = TYPE_ORDER.map(typeId => `${dateKey}_${typeId}`);
     const { data } = await supabase
       .from('pickleball_registrations')
       .select('id, name, count, session_id, arrived, review_status')
@@ -654,7 +648,7 @@ export default function Home() {
 
     const grouped = { experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] };
     (data || []).forEach(item => {
-      const typeId = item.session_id.replace(`${activeDate}_`, '');
+      const typeId = item.session_id.replace(`${dateKey}_`, '');
       if (grouped[typeId]) grouped[typeId].push(item);
     });
     setZoneLists(grouped);
@@ -669,7 +663,7 @@ export default function Home() {
       return;
     }
     fetchAllZoneLists();
-    if (settingsDateKey === activeDate) computeRegistrationFeeSummary(activeDate); // 🆕
+    computeRegistrationFeeSummary(settingsDateKey); // 🆕
   };
 
   // 🆕 幹部權限直接刪除報名（不需要球友的取消密碼）
@@ -677,7 +671,7 @@ export default function Home() {
     if (!confirm(`幹部權限：確定要刪除「${item.name}」的報名？`)) return;
     await supabase.from('pickleball_registrations').delete().eq('id', item.id);
     fetchAllZoneLists();
-    if (settingsDateKey === activeDate) computeRegistrationFeeSummary(activeDate); // 🆕
+    computeRegistrationFeeSummary(settingsDateKey); // 🆕
   };
 
   // 🆕 核准報名：改為 approved，並加入白名單，之後報名都不用再審
@@ -928,7 +922,7 @@ export default function Home() {
       setCheckInName('');
       setCheckInPassword('');
       refreshData();
-      fetchAllZoneLists(); // 🆕
+      fetchAllZoneLists(activeDate); // 🆕
     }
   };
 
@@ -987,7 +981,7 @@ export default function Home() {
 
     alert('取消成功！');
     refreshData();
-    fetchAllZoneLists();
+    fetchAllZoneLists(activeDate);
   };
 
   const currentUrl = typeof window !== 'undefined' ? `${window.location.origin}?mode=checkin` : '';
@@ -1153,6 +1147,29 @@ export default function Home() {
                   <div className="space-y-5">
                     <div className="text-xl sm:text-2xl font-black text-[#d94800] text-center">📋 現場點名與管理主控台</div>
 
+                    {/* 🆕 選擇單日場次：統一控制人數設定/記帳/全區名單管理，可以往前選過去的場次做簽到修正 */}
+                    <div className="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-slate-500">📅 選擇單日場次：</span>
+                      <select
+                        value={settingsDateKey}
+                        onChange={e => {
+                          const newDate = e.target.value;
+                          setSettingsDateKey(newDate);
+                          fetchAllZoneLists(newDate);
+                          fetchSettingsPanelCapacity(newDate);
+                          fetchFinancialRecords(newDate);
+                          computeRegistrationFeeSummary(newDate);
+                        }}
+                        className="bg-slate-50 border p-2 rounded-lg font-bold text-sm flex-1 min-w-[180px]"
+                      >
+                        {upcomingSaturdaysForSettings.map(dateStr => (
+                          <option key={dateStr} value={dateStr}>
+                            {dateStr}（週六）{dateStr === activeDate ? ' - 目前開放中' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <button className="w-full bg-[#3b5998] text-white p-3 rounded-2xl font-bold text-lg shadow hover:bg-[#2d4373]" onClick={() => setShowQrModal(true)}>
                       📷 顯示現場報到用 QR Code
                     </button>
@@ -1207,27 +1224,10 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* 🆕 人數上限設定 */}
+                    {/* 🆕 人數上限設定（日期由上方「選擇單日場次」統一控制） */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-black text-slate-600">⚙️ 設定六個分區人數上限</div>
-                        <select
-                          value={settingsDateKey}
-                          onChange={e => {
-                            const newDate = e.target.value;
-                            setSettingsDateKey(newDate);
-                            fetchSettingsPanelCapacity(newDate);
-                            fetchFinancialRecords(newDate); // 🆕
-                            computeRegistrationFeeSummary(newDate); // 🆕
-                          }}
-                          className="bg-slate-50 border p-1.5 rounded-lg font-bold text-xs"
-                        >
-                          {upcomingSaturdaysForSettings.map(dateStr => (
-                            <option key={dateStr} value={dateStr}>
-                              {dateStr}（週六）{dateStr === activeDate ? ' - 目前開放中' : ''}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="text-sm font-black text-slate-600">⚙️ 設定【{settingsDateKey}】六個分區人數上限</div>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {TYPE_ORDER.map(typeId => (
@@ -1402,9 +1402,9 @@ export default function Home() {
                           <>
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                               <div className="flex items-center gap-2">
-                                <div className="text-lg font-black text-slate-800">全區名單管理（{activeDate}(週六)）</div>
+                                <div className="text-lg font-black text-slate-800">全區名單管理（{settingsDateKey}(週六)）</div>
                                 <button
-                                  onClick={fetchAllZoneLists}
+                                  onClick={() => fetchAllZoneLists()}
                                   className="text-xs font-bold text-sky-600 hover:text-sky-800 underline shrink-0"
                                 >
                                   🔄 重新整理
