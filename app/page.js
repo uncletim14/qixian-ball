@@ -1712,8 +1712,8 @@ export default function Home() {
                     ) : (
                       <>
                         <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-[#0070C0]/20 p-3">
-                          <span className="font-black text-[#0070C0]">✅ 已用 LINE 登入</span>
-                          <a href="/api/logout" className="text-xs font-bold text-slate-400 hover:text-slate-600 underline">登出</a>
+                          <span className="font-black text-[#0070C0] text-lg">✅ 已用 LINE 登入</span>
+                          <a href="/api/logout" className="text-base font-bold text-slate-400 hover:text-slate-600 underline">登出</a>
                         </div>
                         {userWarning && (
                           <div className="mt-2 text-sm font-bold text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 shadow-sm">
@@ -1724,7 +1724,7 @@ export default function Home() {
                             這裡讓你自己打一個別人會看到的暱稱，不用是你的 LINE 真實名稱 */}
                         <input
                           className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]"
-                          placeholder="輸入要顯示在名單上的暱稱（不用是你的LINE本名）"
+                          placeholder="輸入暱稱或代號"
                           value={form.name}
                           onChange={e => setForm({...form, name: e.target.value})}
                         />
