@@ -899,8 +899,6 @@ export default function Home() {
     const trimmedName = form.name.trim();
     if (!trimmedName) { alert('請輸入要顯示在名單上的暱稱！'); return; }
 
-    if (form.password.length !== 4) { alert('請設定 4 位數的「現場報到密碼」（掃碼報到時使用）'); return; }
-
     // 🆕 同一個 LINE 帳號在同一場次不能重複報名
     if (list.some(item => item.line_user_id === myLineUserId)) {
       alert(`❌ 您（${trimmedName}）已經報名過本場次囉！`);
@@ -925,7 +923,6 @@ export default function Home() {
     const { error } = await supabase.from('pickleball_registrations').insert([{
       name: trimmedName,
       count: numericCount,
-      password: form.password,
       line_user_id: myLineUserId,
       session_id: currentSessionId,
       created_at: new Date().toISOString(),
@@ -1733,7 +1730,6 @@ export default function Home() {
                             <option key={n} value={n}>{n} 位</option>
                           ))}
                         </select>
-                        <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" type="password" placeholder="現場報到密碼 (4位數字，掃碼報到時使用)" maxLength={4} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
                         <button className="w-full bg-[#0070C0] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
                       </>
                     )}
