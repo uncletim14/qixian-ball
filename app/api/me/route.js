@@ -1,9 +1,7 @@
-// 📄 檔案路徑：app/api/me/route.ts（新檔案）
-// 🆕 前端頁面載入時會呼叫這支 API，問「我現在是不是登入狀態、登入的人是誰」
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { verifySessionCookieValue, LINE_SESSION_COOKIE_NAME } from '@/lib/lineSession';
 
-export async function GET(req: NextRequest) {
+export async function GET(req) {
   const cookieValue = req.cookies.get(LINE_SESSION_COOKIE_NAME)?.value;
   const session = verifySessionCookieValue(cookieValue);
 
