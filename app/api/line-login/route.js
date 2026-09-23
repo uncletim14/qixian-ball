@@ -1,9 +1,7 @@
-// 📄 檔案路徑：app/api/line-login/route.ts（新檔案）
-// 🆕 點擊「使用 LINE 登入」按鈕時會呼叫這支 API，負責導向 LINE 的授權頁面
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-export async function GET(req: NextRequest) {
+export async function GET(req) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
   const redirectUri = `${siteUrl}/api/line-callback`;
 
@@ -18,12 +16,11 @@ export async function GET(req: NextRequest) {
   authorizeUrl.searchParams.set('scope', 'profile openid');
 
   const res = NextResponse.redirect(authorizeUrl.toString());
-  // 把 state 暫存在一個短效 cookie，等 callback 回來時比對
   res.cookies.set('line_login_state', state, {
     httpOnly: true,
     secure: true,
     sameSite: 'lax',
-    maxAge: 600, // 10 分鐘內要完成登入流程
+    maxAge: 600,
     path: '/'
   });
   return res;
