@@ -31,6 +31,16 @@ function getTargetSaturdayDateStr() {
   return `${yyyy}/${mm}/${dd}`;
 }
 
+// 🆕 會員限定報名：計算「這個星期六場次」對應的解鎖時間點＝該週三晚上 22:00。
+//    每週都用同一條規則自動算出來，幹部不用每週手動改時間，密碼也固定不變。
+function getWednesdayCutoffForSaturday(satDateStr) {
+  const [y, m, d] = satDateStr.split('/').map(Number);
+  const cutoff = new Date(y, m - 1, d);
+  cutoff.setDate(cutoff.getDate() - 3); // 星期六往前推 3 天 = 星期三
+  cutoff.setHours(22, 0, 0, 0);
+  return cutoff;
+}
+
 // 🆕 產生「過去 pastCount 週 + 未來 futureCount 週」的星期六日期清單，
 //    供管理員面板的「選擇單日場次」統一日期選單使用：可以回頭看過去的場次做簽到修正，
 //    也能預先設定未來週次，跟即時決定報名開放日(activeDate)的邏輯分開
@@ -107,6 +117,16 @@ export default function Home() {
 
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
 
+  // 🆕 LINE 登入狀態：null = 尚未確認，{loggedIn:false} = 確認未登入，{loggedIn:true,...} = 已登入
+  const [lineSession, setLineSession] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/me')
+      .then(res => res.json())
+      .then(data => setLineSession(data))
+      .catch(() => setLineSession({ loggedIn: false }));
+  }, []);
+
   // 🆕 防灌爆機制：
   // 1. honeypot：一般人看不到、不會填的隱藏欄位，機器人腳本常會自動把所有欄位都填一遍，
   //    只要這欄有值就直接視為機器人，靜默擋下（不特別告知，避免對方調整腳本繼續嘗試）
@@ -118,13 +138,13 @@ export default function Home() {
   const [checkInPassword, setCheckInPassword] = useState('');
   const [userWarning, setUserWarning] = useState('');
 
-  // 🆕 會員限定報名模式：openAt 之前需要輸入會員密碼才能報名，openAt 之後自動開放給所有人
-  const [openAt, setOpenAt] = useState(null); // 只存自動開放時間，絕不把密碼抓到前端
+  // 🆕 會員限定報名模式：固定規則「每週三晚上 22:00 前」需要會員密碼，22:00 之後自動開放給所有人。
+  //    不用每週手動設定開放時間；earlyOpenForDate 只用於「這一週想提前解鎖」的例外情況。
   const [membersPassword, setMembersPassword] = useState(''); // 使用者在表單輸入的密碼
-  const isMembersOnlyActive = openAt ? new Date() < new Date(openAt) : false;
+  const [earlyOpenForDate, setEarlyOpenForDate] = useState(null); // 若等於 activeDate，代表幹部手動提前解鎖了本週
+  const isMembersOnlyActive = earlyOpenForDate === activeDate ? false : new Date() < getWednesdayCutoffForSaturday(activeDate);
 
-  // 🆕 管理員面板用：設定會員限定的自動開放時間 + (可選)更新密碼
-  const [openAtInput, setOpenAtInput] = useState('');
+  // 🆕 管理員面板用：(可選)更新密碼
   const [membersOnlyPasswordInput, setMembersOnlyPasswordInput] = useState('');
 
   // 🆕 因雨取消狀態（以日期本身為 key，整天生效，不分區域）
@@ -175,56 +195,46 @@ export default function Home() {
     }
   }, []);
 
-  // 🆕 掛載時抓取「自動開放時間」，注意：絕對不 select 密碼欄位，避免密碼被傳到每個訪客的瀏覽器
+  // 🆕 掛載時抓取「本週是否被幹部手動提前解鎖」的狀態，注意：絕對不 select 密碼欄位，避免密碼被傳到每個訪客的瀏覽器
   useEffect(() => {
-    fetchOpenAt();
+    fetchMembersOnlySettings();
   }, []);
 
-  // 🆕 把 UTC 時間戳記轉換成 datetime-local 輸入框需要的「本地時間」格式，
-  //    修正之前用 toISOString() 直接切字串會變成 UTC 時間、導致畫面顯示跟本地時間差了時區offset的bug
-  const formatDateTimeLocal = (isoString) => {
-    const d = new Date(isoString);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const fetchMembersOnlySettings = async () => {
+    const { data } = await supabase.from('site_settings').select('early_open_for_date').eq('id', 1).maybeSingle();
+    setEarlyOpenForDate(data?.early_open_for_date || null);
   };
 
-  const fetchOpenAt = async () => {
-    const { data } = await supabase.from('site_settings').select('open_at').eq('id', 1).maybeSingle();
-    setOpenAt(data?.open_at || null);
-    setOpenAtInput(data?.open_at ? formatDateTimeLocal(data.open_at) : '');
-  };
-
-  // 🆕 管理員儲存會員限定設定：密碼欄位留空代表「不變更密碼」，只更新開放時間
+  // 🆕 管理員儲存會員限定密碼（開放時間已改成固定規則「每週三 22:00」自動生效，不需要每週手動設定）
   const handleSaveMembersOnlySettings = async () => {
-    const payload = {
-      id: 1,
-      open_at: openAtInput ? new Date(openAtInput).toISOString() : null
-    };
-    if (membersOnlyPasswordInput.trim() !== '') {
-      payload.members_only_password = membersOnlyPasswordInput.trim();
+    if (membersOnlyPasswordInput.trim() === '') {
+      alert('請先輸入要設定的新密碼再儲存！');
+      return;
     }
-
-    const { error } = await supabase.from('site_settings').upsert(payload, { onConflict: 'id' });
+    const { error } = await supabase
+      .from('site_settings')
+      .upsert({ id: 1, members_only_password: membersOnlyPasswordInput.trim() }, { onConflict: 'id' });
     if (error) {
       alert(`儲存失敗：${error.message}`);
       return;
     }
 
-    alert('🎉 已儲存會員限定設定！');
+    alert('🎉 已更新會員密碼！（此密碼固定使用，每週三晚上 22:00 自動開放，不用再重新設定）');
     setMembersOnlyPasswordInput('');
-    fetchOpenAt();
   };
 
-  // 🆕 立即開放：把開放時間設成現在，馬上解除會員限定
+  // 🆕 本週提前解鎖：只解鎖「目前這一場（activeDate）」，下週會自動恢復「週三 22:00 才開放」的正常規則，不用手動改回來
   const handleOpenNow = async () => {
-    if (!confirm('確定要立即解除會員限定、開放給所有人報名嗎？')) return;
-    const { error } = await supabase.from('site_settings').upsert({ id: 1, open_at: new Date().toISOString() }, { onConflict: 'id' });
+    if (!confirm(`確定要提前解除本週（${activeDate}）的會員限定、馬上開放給所有人報名嗎？\n\n下週會自動恢復正常規則（週三 22:00 開放），不需要再手動設回去。`)) return;
+    const { error } = await supabase
+      .from('site_settings')
+      .upsert({ id: 1, early_open_for_date: activeDate }, { onConflict: 'id' });
     if (error) {
       alert(`操作失敗：${error.message}`);
       return;
     }
-    alert('🎉 已立即開放給所有人！');
-    fetchOpenAt();
+    alert('🎉 已提前開放本週給所有人！');
+    fetchMembersOnlySettings();
   };
 
   // 🆕 自助報到模式需要涵蓋全部分區（含晚上散打），所以要抓取全區名單（一律用「目前真正開放中」的 activeDate，不受管理員瀏覽日期影響）
@@ -274,16 +284,17 @@ export default function Home() {
     setCheckInPassword('');
   }, [selectedType, form.count]);
 
-  // 當球友輸入暱稱時，即時查詢違規/停權紀錄
+  // 🆕 LINE 登入成功後，即時查詢違規/停權紀錄（改用 line_user_id 比對，取代原本輸入暱稱查詢）
   useEffect(() => {
-    const trimmedName = form.name.trim();
-    if (!trimmedName) {
+    if (!lineSession?.loggedIn) {
       setUserWarning('');
       return;
     }
+    const myLineUserId = lineSession.lineUserId;
+    const trimmedName = lineSession.displayName;
 
     const checkUserViolation = async () => {
-      const { data } = await supabase.from('pickleball_blacklists').select('*').eq('name', trimmedName).maybeSingle();
+      const { data } = await supabase.from('pickleball_blacklists').select('*').eq('line_user_id', myLineUserId).maybeSingle();
       if (!data) {
         setUserWarning('');
         return;
@@ -295,17 +306,16 @@ export default function Home() {
       const isCurrentlyBlocked = data.blocked_until && new Date(data.blocked_until) >= today;
 
       if (isCurrentlyBlocked) {
-        setUserWarning(`🚫 提醒：暱稱【${trimmedName}】目前處於停權狀態（至 ${data.blocked_until} 止），將無法完成報名！`);
+        setUserWarning(`🚫 提醒：【${trimmedName}】目前處於停權狀態（至 ${data.blocked_until} 止），將無法完成報名！`);
       } else if (data.no_show_count > 0) {
-        setUserWarning(`⚠️ 提醒：暱稱【${trimmedName}】目前已有 ${data.no_show_count} 次未報到紀錄，請報名後務必準時出席喔！`);
+        setUserWarning(`⚠️ 提醒：【${trimmedName}】目前已有 ${data.no_show_count} 次未報到紀錄，請報名後務必準時出席喔！`);
       } else {
         setUserWarning('');
       }
     };
 
-    const timer = setTimeout(checkUserViolation, 500);
-    return () => clearTimeout(timer);
-  }, [form.name]);
+    checkUserViolation();
+  }, [lineSession]);
 
   // 讀取報名資料
   useEffect(() => {
@@ -320,7 +330,7 @@ export default function Home() {
   }, [activeDate]);
 
   const load = async () => {
-    const { data } = await supabase.from('pickleball_registrations').select('id, name, count, session_id, arrived, review_status').eq('session_id', currentSessionId).order('created_at', { ascending: true });
+    const { data } = await supabase.from('pickleball_registrations').select('id, name, count, session_id, arrived, review_status, line_user_id').eq('session_id', currentSessionId).order('created_at', { ascending: true });
     if (data) setList(data);
   };
 
@@ -431,7 +441,7 @@ export default function Home() {
     const sessionIds = TYPE_ORDER.map(typeId => `${dateKey}_${typeId}`);
     const { data } = await supabase
       .from('pickleball_registrations')
-      .select('id, name, count, session_id, arrived, review_status')
+      .select('id, name, count, session_id, arrived, review_status, line_user_id')
       .in('session_id', sessionIds);
 
     const grouped = { experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] };
@@ -502,7 +512,7 @@ export default function Home() {
       const sessionIds = TYPE_ORDER.map(typeId => `${dateKey}_${typeId}`);
       const { data: dayRegs } = await supabase
         .from('pickleball_registrations')
-        .select('id, name, count, session_id, arrived, review_status')
+        .select('id, name, count, session_id, arrived, review_status, line_user_id')
         .in('session_id', sessionIds);
 
       const grouped = { experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] };
@@ -604,7 +614,7 @@ export default function Home() {
 
   // 🆕 抓取所有待審核報名（不分場次分區，因為審核是全站通用的名字白名單）
   const fetchPendingList = async () => {
-    const { data } = await supabase.from('pickleball_registrations').select('id, name, count, session_id, arrived, review_status, created_at').eq('review_status', 'pending').order('created_at', { ascending: true });
+    const { data } = await supabase.from('pickleball_registrations').select('id, name, count, session_id, arrived, review_status, created_at, line_user_id').eq('review_status', 'pending').order('created_at', { ascending: true });
     setPendingList(data || []);
   };
 
@@ -642,7 +652,7 @@ export default function Home() {
     const sessionIds = TYPE_ORDER.map(typeId => `${dateKey}_${typeId}`);
     const { data } = await supabase
       .from('pickleball_registrations')
-      .select('id, name, count, session_id, arrived, review_status')
+      .select('id, name, count, session_id, arrived, review_status, line_user_id')
       .in('session_id', sessionIds)
       .order('created_at', { ascending: true });
 
@@ -683,7 +693,12 @@ export default function Home() {
     }
 
     const trimmedName = item.name.trim();
-    await supabase.from('approved_names').upsert({ name: trimmedName }, { onConflict: 'name' });
+    // 🆕 白名單改用 line_user_id 當唯一依據（沒有 line_user_id 的舊資料則退回用姓名，做向下相容）
+    if (item.line_user_id) {
+      await supabase.from('approved_names').upsert({ name: trimmedName, line_user_id: item.line_user_id }, { onConflict: 'line_user_id' });
+    } else {
+      await supabase.from('approved_names').upsert({ name: trimmedName }, { onConflict: 'name' });
+    }
 
     alert(`✅ 已核准「${trimmedName}」，之後報名將不需再審核！`);
     fetchPendingList();
@@ -703,22 +718,33 @@ export default function Home() {
     computeRegistrationFeeSummary(settingsDateKey); // 🆕
   };
 
-  // 🆕 手動停權 30 天
-  const handleManualBlock = async (name) => {
+  // 🆕 手動停權 30 天：改用 line_user_id 當比對依據（換顯示名稱也擋得住），
+  //    沒有 line_user_id 的舊資料（LINE 登入上線前留下的）則退回用姓名比對，做向下相容
+  const handleManualBlock = async (entry) => {
+    const name = entry.name;
     if (!confirm(`確定要將「${name}」停權 30 天嗎？`)) return;
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + 30);
     const blockedUntilStr = targetDate.toISOString().split('T')[0];
 
-    await supabase.from('pickleball_blacklists').upsert({ name, blocked_until: blockedUntilStr }, { onConflict: 'name' });
+    if (entry.line_user_id) {
+      await supabase.from('pickleball_blacklists').upsert({ name, line_user_id: entry.line_user_id, blocked_until: blockedUntilStr }, { onConflict: 'line_user_id' });
+    } else {
+      await supabase.from('pickleball_blacklists').upsert({ name, blocked_until: blockedUntilStr }, { onConflict: 'name' });
+    }
     alert(`已將「${name}」停權至 ${blockedUntilStr}！`);
     fetchBlacklistEntries();
   };
 
   // 🆕 解除停權
-  const handleUnblock = async (name) => {
+  const handleUnblock = async (entry) => {
+    const name = entry.name;
     if (!confirm(`確定要解除「${name}」的停權嗎？`)) return;
-    await supabase.from('pickleball_blacklists').update({ blocked_until: null }).eq('name', name);
+    if (entry.line_user_id) {
+      await supabase.from('pickleball_blacklists').update({ blocked_until: null }).eq('line_user_id', entry.line_user_id);
+    } else {
+      await supabase.from('pickleball_blacklists').update({ blocked_until: null }).eq('name', name);
+    }
     alert(`已解除「${name}」的停權！`);
     fetchBlacklistEntries();
   };
@@ -817,12 +843,24 @@ export default function Home() {
       return;
     }
 
-    const trimmedName = form.name.trim();
-    if (!trimmedName || form.password.length !== 4) { alert('請輸入暱稱與 4 位密碼'); return; }
-    if (list.some(item => item.name.toLowerCase() === trimmedName.toLowerCase())) { alert(`❌ 暱稱「${trimmedName}」已被使用！`); return; }
+    // 🆕 身份改用 LINE 登入驗證，不再是自己輸入姓名。未登入不能報名。
+    if (!lineSession?.loggedIn) {
+      alert('🔒 請先使用 LINE 登入才能報名！');
+      return;
+    }
+    const trimmedName = lineSession.displayName;
+    const myLineUserId = lineSession.lineUserId;
 
-    // 🆕 停權檢查：真正擋下報名，而不只是顯示警示文字
-    const { data: blockRecord } = await supabase.from('pickleball_blacklists').select('blocked_until').eq('name', trimmedName).maybeSingle();
+    if (form.password.length !== 4) { alert('請設定 4 位數的「現場報到密碼」（掃碼報到時使用）'); return; }
+
+    // 🆕 同一個 LINE 帳號在同一場次不能重複報名
+    if (list.some(item => item.line_user_id === myLineUserId)) {
+      alert(`❌ 您（${trimmedName}）已經報名過本場次囉！`);
+      return;
+    }
+
+    // 🆕 停權檢查：改用 LINE 使用者 ID 比對，換顯示名稱也擋得住，真正擋下報名
+    const { data: blockRecord } = await supabase.from('pickleball_blacklists').select('blocked_until').eq('line_user_id', myLineUserId).maybeSingle();
     if (blockRecord?.blocked_until) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -832,14 +870,15 @@ export default function Home() {
       }
     }
 
-    // 🆕 查詢是否已在審核通過白名單中，決定 review_status
-    const { data: approvedRecord } = await supabase.from('approved_names').select('id').eq('name', trimmedName).maybeSingle();
+    // 🆕 查詢是否已在審核通過白名單中（用 LINE 使用者 ID 比對），決定 review_status
+    const { data: approvedRecord } = await supabase.from('approved_names').select('id').eq('line_user_id', myLineUserId).maybeSingle();
     const reviewStatus = approvedRecord ? 'approved' : 'pending';
 
     const { error } = await supabase.from('pickleball_registrations').insert([{
       name: trimmedName,
       count: numericCount,
       password: form.password,
+      line_user_id: myLineUserId,
       session_id: currentSessionId,
       created_at: new Date().toISOString(),
       arrived: false,
@@ -943,30 +982,45 @@ export default function Home() {
     }
 
     for (const item of noShowList) {
-      const { data: existing } = await supabase.from('pickleball_blacklists').select('*').eq('name', item.name).maybeSingle();
-      const newCount = (existing?.no_show_count || 0) + 1;
-
-      await supabase.from('pickleball_blacklists').upsert({
-        name: item.name,
-        no_show_count: newCount
-      }, { onConflict: 'name' });
+      // 🆕 改用 line_user_id 累計缺席次數（換顯示名稱也還是算同一個人），
+      //    沒有 line_user_id 的舊報名資料則退回用姓名比對，做向下相容
+      if (item.line_user_id) {
+        const { data: existing } = await supabase.from('pickleball_blacklists').select('*').eq('line_user_id', item.line_user_id).maybeSingle();
+        const newCount = (existing?.no_show_count || 0) + 1;
+        await supabase.from('pickleball_blacklists').upsert({
+          name: item.name,
+          line_user_id: item.line_user_id,
+          no_show_count: newCount
+        }, { onConflict: 'line_user_id' });
+      } else {
+        const { data: existing } = await supabase.from('pickleball_blacklists').select('*').eq('name', item.name).maybeSingle();
+        const newCount = (existing?.no_show_count || 0) + 1;
+        await supabase.from('pickleball_blacklists').upsert({
+          name: item.name,
+          no_show_count: newCount
+        }, { onConflict: 'name' });
+      }
     }
 
     alert(`✅ 結算完成！已為 ${noShowList.length} 位未報到球友累記缺席次數。`);
     fetchBlacklistEntries();
   };
 
+  // 🆕 取消報名改用 LINE 登入身份驗證，不用再輸入密碼。
+  //    只有自己（line_user_id 相符）的報名，畫面上才會顯示「取消」按鈕，這裡再驗證一次避免被繞過。
   const handleDelete = async (item) => {
-    const pwd = prompt('請輸入 4 位取消密碼：');
-    if (!pwd) return;
+    if (!lineSession?.loggedIn || item.line_user_id !== lineSession.lineUserId) {
+      alert('🔒 只能取消您自己（LINE 帳號）建立的報名！');
+      return;
+    }
 
-    // 🆕 加上 .select()，讓 Supabase 回傳「實際被刪除的那幾筆」；
-    //    密碼錯誤時會刪除 0 筆（不是 error），必須額外檢查有沒有真的刪到才能判斷密碼對不對
+    if (!confirm(`確定要取消【${item.name}】的報名嗎？`)) return;
+
     const { data, error } = await supabase
       .from('pickleball_registrations')
       .delete()
       .eq('id', item.id)
-      .eq('password', pwd)
+      .eq('line_user_id', lineSession.lineUserId)
       .select();
 
     if (error) {
@@ -975,7 +1029,7 @@ export default function Home() {
     }
 
     if (!data || data.length === 0) {
-      alert('❌ 密碼錯誤，取消失敗！');
+      alert('❌ 取消失敗，請重新整理頁面後再試一次！');
       return;
     }
 
@@ -1182,29 +1236,25 @@ export default function Home() {
                       {isCancelled ? '⛈️ 因雨取消中（點擊恢復正常）' : '🟢 球敘正常（點擊設為因雨取消）'}
                     </button>
 
-                    {/* 🆕 會員限定報名設定 */}
+                    {/* 🆕 會員限定報名設定：固定規則，每週三晚上 22:00 自動開放，密碼固定不用每週改 */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
                       <div className="text-sm font-black text-slate-600">
                         🔒 會員限定報名設定
                         {isMembersOnlyActive ? (
-                          <span className="ml-2 text-xs font-bold text-amber-600">目前生效中</span>
+                          <span className="ml-2 text-xs font-bold text-amber-600">目前生效中（需要密碼）</span>
                         ) : (
                           <span className="ml-2 text-xs font-bold text-emerald-600">目前未限制（公開報名中）</span>
                         )}
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-slate-500">自動開放時間（此時間之後任何人都能直接報名）</label>
-                        <input
-                          type="datetime-local"
-                          value={openAtInput}
-                          onChange={e => setOpenAtInput(e.target.value)}
-                          className="w-full bg-slate-50 border p-2 rounded-lg font-bold text-sm"
-                        />
+                      <div className="text-xs font-bold text-slate-500 bg-slate-50 p-2 rounded-lg">
+                        固定規則：每週三晚上 22:00 自動開放給所有人報名，之後自動每週重複，不用手動設定。
+                        <br />
+                        本場次（{activeDate}）解鎖時間：{getWednesdayCutoffForSaturday(activeDate).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-xs font-bold text-slate-500">會員密碼（留空 = 不變更密碼）</label>
+                        <label className="text-xs font-bold text-slate-500">會員密碼（固定使用，留空 = 不變更密碼）</label>
                         <input
                           type="text"
                           placeholder="設定/更新會員限定密碼"
@@ -1216,10 +1266,10 @@ export default function Home() {
 
                       <div className="flex gap-2">
                         <button onClick={handleSaveMembersOnlySettings} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-black py-2.5 rounded-xl text-sm">
-                          儲存設定
+                          儲存密碼
                         </button>
                         <button onClick={handleOpenNow} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-sm">
-                          立即開放
+                          本週提前開放
                         </button>
                       </div>
                     </div>
@@ -1532,9 +1582,9 @@ export default function Home() {
                                 </div>
                                 <div className="flex gap-2">
                                   {isBlocked ? (
-                                    <button onClick={() => handleUnblock(entry.name)} className="bg-white border text-slate-600 hover:text-emerald-700 text-xs font-black px-3 py-1.5 rounded-lg">🔓 解除停權</button>
+                                    <button onClick={() => handleUnblock(entry)} className="bg-white border text-slate-600 hover:text-emerald-700 text-xs font-black px-3 py-1.5 rounded-lg">🔓 解除停權</button>
                                   ) : (
-                                    <button onClick={() => handleManualBlock(entry.name)} className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-3 py-1.5 rounded-lg">🚫 停權30天</button>
+                                    <button onClick={() => handleManualBlock(entry)} className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-3 py-1.5 rounded-lg">🚫 停權30天</button>
                                   )}
                                 </div>
                               </div>
@@ -1586,21 +1636,34 @@ export default function Home() {
                         />
                       </div>
                     )}
-                    <div>
-                      <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" placeholder="輸入暱稱" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                      {userWarning && (
-                        <div className="mt-2 text-sm font-bold text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 shadow-sm">
-                          {userWarning}
+                    {/* 🆕 身份改用 LINE 登入驗證，取代自己輸入姓名 */}
+                    {!lineSession?.loggedIn ? (
+                      <div className="text-center space-y-3 py-2">
+                        <p className="text-slate-600 font-bold text-sm sm:text-base">🔒 請先使用 LINE 登入才能報名（防止黑名單被繞過）</p>
+                        <a href="/api/line-login" className="inline-block w-full bg-[#06C755] hover:bg-[#05b34c] text-white p-4 rounded-2xl text-xl font-black shadow-md">
+                          使用 LINE 登入
+                        </a>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-[#0070C0]/20 p-3">
+                          <span className="font-black text-[#0070C0]">✅ 已用 LINE 登入：{lineSession.displayName}</span>
+                          <a href="/api/logout" className="text-xs font-bold text-slate-400 hover:text-slate-600 underline">登出</a>
                         </div>
-                      )}
-                    </div>
-                    <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
-                      {Array.from({ length: currentTypeConfig.perSubmitMax }, (_, i) => i + 1).map(n => (
-                        <option key={n} value={n}>{n} 位</option>
-                      ))}
-                    </select>
-                    <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" type="password" placeholder="取消密碼 (4位數字)" maxLength={4} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-                    <button className="w-full bg-[#0070C0] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
+                        {userWarning && (
+                          <div className="mt-2 text-sm font-bold text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 shadow-sm">
+                            {userWarning}
+                          </div>
+                        )}
+                        <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
+                          {Array.from({ length: currentTypeConfig.perSubmitMax }, (_, i) => i + 1).map(n => (
+                            <option key={n} value={n}>{n} 位</option>
+                          ))}
+                        </select>
+                        <input className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" type="password" placeholder="現場報到密碼 (4位數字，掃碼報到時使用)" maxLength={4} value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+                        <button className="w-full bg-[#0070C0] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
+                      </>
+                    )}
                   </div>
                 )
               )}
@@ -1639,7 +1702,9 @@ export default function Home() {
                       )}
                       {item.name} <span className="text-sm font-normal text-slate-400">({item.count}位)</span>
                     </span>
-                    <button className="text-red-500 text-sm font-bold bg-red-50 px-3 py-1.5 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
+                    {lineSession?.loggedIn && item.line_user_id === lineSession.lineUserId && (
+                      <button className="text-red-500 text-sm font-bold bg-red-50 px-3 py-1.5 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
+                    )}
                   </div>
                 );
               })}
@@ -1658,7 +1723,9 @@ export default function Home() {
                     {item.review_status === 'pending' && <span className="bg-amber-400 text-slate-900 text-xs px-2 py-1 rounded-full font-bold mr-2">⏳審核中</span>}
                     <span className="text-[#ff6d00] mr-2">[備取 {index + 1}]</span>{item.name} ({item.count}位)
                   </span>
-                  <button className="text-red-500 text-sm bg-red-50 px-3 py-1.5 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
+                  {lineSession?.loggedIn && item.line_user_id === lineSession.lineUserId && (
+                    <button className="text-red-500 text-sm bg-red-50 px-3 py-1.5 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
+                  )}
                 </div>
               ))}
             </div>
