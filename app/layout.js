@@ -1,7 +1,7 @@
 import './globals.css';
 
 export const metadata = {
-  title: '七賢國小新手體驗報名系統',
+  title: '七賢匹克周末球敘團',
   description: '南高雄七賢國小匹克球交流團',
 }
 
