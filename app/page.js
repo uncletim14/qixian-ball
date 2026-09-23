@@ -277,8 +277,6 @@ export default function Home() {
   }, [selectedSession]);
 
   useEffect(() => {
-    setAdminPin('');
-    setIsAdminAuthenticated(false);
     setCheckInName('');
     setCheckInPassword('');
   }, [isCheckInMode]);
