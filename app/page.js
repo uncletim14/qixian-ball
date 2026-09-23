@@ -111,8 +111,12 @@ export default function Home() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [isSelfCheckIn, setIsSelfCheckIn] = useState(false);
 
-  const [adminPin, setAdminPin] = useState('');
+  // 🆕 管理員登入改用真正的 Supabase Auth 帳號密碼（伺服器驗證），
+  //    不再是寫死在前端程式碼裡、任何人都能在瀏覽器原始碼找到的暗號
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminAuthChecked, setAdminAuthChecked] = useState(false);
   const [clickCount, setClickCount] = useState(0);
 
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
@@ -595,21 +599,65 @@ export default function Home() {
     await load();
   };
 
-  const verifyAdminPin = () => {
-    if (adminPin === '8888') {
-      setIsAdminAuthenticated(true);
-      fetchPendingList();
-      fetchBlacklistEntries();
-      setSettingsDateKey(activeDate); // 🆕 重設統一日期選單回到目前開放中的週次
-      fetchAllZoneLists(activeDate); // 🆕
-      fetchSettingsPanelCapacity(activeDate); // 🆕
-      fetchFinancialRecords(activeDate); // 🆕
-      computeRegistrationFeeSummary(activeDate); // 🆕
-      fetchAvailableExportMonths(); // 🆕
-    } else {
-      alert('❌ 管理員暗號錯誤！');
-      setAdminPin('');
+  // 🆕 登入成功後要載入的後台資料，整理成一個函式，登入當下跟「重新整理頁面後自動恢復登入」都會用到
+  const loadAdminData = () => {
+    fetchPendingList();
+    fetchBlacklistEntries();
+    setSettingsDateKey(activeDate);
+    fetchAllZoneLists(activeDate);
+    fetchSettingsPanelCapacity(activeDate);
+    fetchFinancialRecords(activeDate);
+    computeRegistrationFeeSummary(activeDate);
+    fetchAvailableExportMonths();
+  };
+
+  // 🆕 掛載時檢查是否已經有登入中的管理員 session（例如重新整理頁面），有的話直接恢復登入狀態，
+  //    不用每次重新整理都要重新輸入帳密
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session) {
+        setIsAdminAuthenticated(true);
+        loadAdminData();
+      }
+      setAdminAuthChecked(true);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAdminAuthenticated(!!session);
+    });
+
+    return () => {
+      listener?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  // 🆕 管理員登入：真正呼叫 Supabase Auth 驗證帳號密碼，驗證在伺服器端進行，
+  //    密碼本身不會出現在前端程式碼裡，也不會被瀏覽器看到
+  const handleAdminLogin = async () => {
+    if (!adminEmail.trim() || !adminPassword) {
+      alert('請輸入管理員帳號與密碼！');
+      return;
     }
+    const { error } = await supabase.auth.signInWithPassword({
+      email: adminEmail.trim(),
+      password: adminPassword
+    });
+
+    if (error) {
+      alert('❌ 登入失敗：帳號或密碼錯誤！');
+      setAdminPassword('');
+      return;
+    }
+
+    setAdminPassword('');
+    setIsAdminAuthenticated(true);
+    loadAdminData();
+  };
+
+  // 🆕 管理員登出
+  const handleAdminLogout = async () => {
+    await supabase.auth.signOut();
+    setIsAdminAuthenticated(false);
   };
 
   // 🆕 抓取所有待審核報名（不分場次分區，因為審核是全站通用的名字白名單）
@@ -1195,13 +1243,30 @@ export default function Home() {
               {isCheckInMode ? (
                 !isAdminAuthenticated ? (
                   <div className="space-y-4 text-center">
-                    <div className="text-xl sm:text-2xl font-black text-[#d94800]">🔒 請輸入管理員專用暗號</div>
-                    <input className="w-full p-4 bg-white rounded-2xl border-2 text-center text-2xl tracking-widest focus:outline-none focus:border-[#ff6d00]" type="password" placeholder="請輸入 4 位暗號" value={adminPin} onChange={e => setAdminPin(e.target.value)} />
-                    <button className="w-full bg-[#ff6d00] text-white p-4 rounded-2xl text-xl font-black" onClick={verifyAdminPin}>解除鎖定</button>
+                    <div className="text-xl sm:text-2xl font-black text-[#d94800]">🔒 管理員登入</div>
+                    <input
+                      className="w-full p-4 bg-white rounded-2xl border-2 text-lg focus:outline-none focus:border-[#ff6d00]"
+                      type="email"
+                      placeholder="管理員帳號 (Email)"
+                      value={adminEmail}
+                      onChange={e => setAdminEmail(e.target.value)}
+                    />
+                    <input
+                      className="w-full p-4 bg-white rounded-2xl border-2 text-center text-lg tracking-widest focus:outline-none focus:border-[#ff6d00]"
+                      type="password"
+                      placeholder="密碼"
+                      value={adminPassword}
+                      onChange={e => setAdminPassword(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleAdminLogin(); }}
+                    />
+                    <button className="w-full bg-[#ff6d00] text-white p-4 rounded-2xl text-xl font-black" onClick={handleAdminLogin}>登入</button>
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    <div className="text-xl sm:text-2xl font-black text-[#d94800] text-center">📋 現場點名與管理主控台</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-xl sm:text-2xl font-black text-[#d94800]">📋 現場點名與管理主控台</div>
+                      <button onClick={handleAdminLogout} className="text-xs font-bold text-slate-400 hover:text-slate-600 underline">登出</button>
+                    </div>
 
                     {/* 🆕 選擇單日場次：統一控制人數設定/記帳/全區名單管理，可以往前選過去的場次做簽到修正 */}
                     <div className="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center gap-2">
