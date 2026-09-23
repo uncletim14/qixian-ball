@@ -843,13 +843,15 @@ export default function Home() {
       return;
     }
 
-    // 🆕 身份改用 LINE 登入驗證，不再是自己輸入姓名。未登入不能報名。
+    // 🆕 身份驗證改用 LINE 登入（黑名單/白名單比對用），但顯示在名單上的名字改用自己打的暱稱，
+    //    兩者分開：暱稱只是給別人看的，真正認人是靠 LINE 帳號
     if (!lineSession?.loggedIn) {
       alert('🔒 請先使用 LINE 登入才能報名！');
       return;
     }
-    const trimmedName = lineSession.displayName;
     const myLineUserId = lineSession.lineUserId;
+    const trimmedName = form.name.trim();
+    if (!trimmedName) { alert('請輸入要顯示在名單上的暱稱！'); return; }
 
     if (form.password.length !== 4) { alert('請設定 4 位數的「現場報到密碼」（掃碼報到時使用）'); return; }
 
@@ -1647,7 +1649,7 @@ export default function Home() {
                     ) : (
                       <>
                         <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-[#0070C0]/20 p-3">
-                          <span className="font-black text-[#0070C0]">✅ 已用 LINE 登入：{lineSession.displayName}</span>
+                          <span className="font-black text-[#0070C0]">✅ 已用 LINE 登入</span>
                           <a href="/api/logout" className="text-xs font-bold text-slate-400 hover:text-slate-600 underline">登出</a>
                         </div>
                         {userWarning && (
@@ -1655,6 +1657,14 @@ export default function Home() {
                             {userWarning}
                           </div>
                         )}
+                        {/* 🆕 顯示暱稱跟登入身份分開：LINE 帳號只用來做身份驗證（黑名單/白名單），
+                            這裡讓你自己打一個別人會看到的暱稱，不用是你的 LINE 真實名稱 */}
+                        <input
+                          className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]"
+                          placeholder="輸入要顯示在名單上的暱稱（不用是你的LINE本名）"
+                          value={form.name}
+                          onChange={e => setForm({...form, name: e.target.value})}
+                        />
                         <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
                           {Array.from({ length: currentTypeConfig.perSubmitMax }, (_, i) => i + 1).map(n => (
                             <option key={n} value={n}>{n} 位</option>
