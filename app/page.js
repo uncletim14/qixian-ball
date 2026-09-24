@@ -1093,7 +1093,7 @@ export default function Home() {
         <div className="h-4"></div>
 
         {/* 🌟 大標題與活潑視覺排版 🌟 */}
-        <div className={`text-center p-6 sm:p-10 rounded-3xl shadow-lg border-2 transition-all ${isSelfCheckIn ? 'bg-[#e6fcf5] border-[#63e6be]' : isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
+        <div className={`text-center p-6 sm:p-8 rounded-3xl shadow-lg border-2 transition-all ${isSelfCheckIn ? 'bg-[#e6fcf5] border-[#63e6be]' : isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
 
           <h1 className={`text-3xl sm:text-5xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#0070C0]'}`}>
             七賢匹克周末球敘<span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">團</span>
@@ -1123,15 +1123,13 @@ export default function Home() {
                   </span>
                 </div>
 
-                {/* 🆕 本場次日期 + 時間資訊（早上/晚上分兩行顯示） */}
-                <div className="text-[#0070C0] text-base sm:text-2xl font-black tracking-wide pt-1 space-y-1">
-                  <p>📅 本場次：週六 {activeDate}</p>
-                  <p>🌅 早上 9:00-12:00</p>
-                  <p>🌙 晚上 19:00-21:20</p>
-                </div>
+                {/* 🆕 本場次日期（時間已在下方時段區塊顯示，這裡不重複） */}
+                <p className="text-[#0070C0] text-lg sm:text-2xl font-black tracking-wide pt-1">
+                  📅 本場次：週六 {activeDate}
+                </p>
 
                 {/* 🔴 網站更新提示 🔴 */}
-                <p className="text-red-600 text-sm sm:text-lg font-black tracking-wider pt-1 flex items-center justify-center gap-1">
+                <p className="text-red-600 text-sm sm:text-lg font-black tracking-wider flex items-center justify-center gap-1">
                   <span>⏰</span> 網站報名每週六晚上 10 點更新
                 </p>
               </>
