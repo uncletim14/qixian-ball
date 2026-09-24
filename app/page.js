@@ -1720,7 +1720,11 @@ export default function Home() {
                         <a href="/api/line-login" className="inline-block w-full bg-[#06C755] hover:bg-[#05b34c] text-white p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }}>
                           使用 LINE 登入
                         </a>
-                        <p className="text-white/80 font-bold text-xs">🔐 LINE 僅用於登入驗證身份（防止換名字逃避停權），不會取得您的電話、Email 等敏感資料，也不會公開您的 LINE 個人資料</p>
+                        <p className="text-white/80 font-bold text-xs">
+                          🔐 LINE 僅用於登入驗證身份（防止換名字逃避停權），<br />
+                          不會取得您的電話、Email 等敏感資料，<br />
+                          也不會公開您的 LINE 個人資料
+                        </p>
                       </div>
                     ) : (
                       <>
