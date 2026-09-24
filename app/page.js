@@ -1725,7 +1725,7 @@ export default function Home() {
                       <>
                         <div className="flex items-center justify-between bg-[#e8c23a] rounded-2xl border-[3px] border-[#101010] p-3">
                           <span className="font-black text-[#101010] text-lg">✅ 已用 LINE 登入</span>
-                          <a href="/api/logout" className="text-base font-bold text-[#3a3a1a] hover:text-[#101010] underline">登出</a>
+                          <a href="/api/logout" className="text-sm font-black text-[#101010] bg-white px-3 py-1.5 rounded-lg border-2 border-[#101010]">登出</a>
                         </div>
                         {userWarning && (
                           <div className="mt-2 text-sm font-bold text-amber-900 bg-amber-50 p-3 rounded-xl border-2 border-[#101010]">
