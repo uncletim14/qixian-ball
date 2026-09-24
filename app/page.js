@@ -1202,13 +1202,15 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setSelectedSession('AM')}
-                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-2 flex items-center justify-center gap-2 ${selectedSession === 'AM' ? 'bg-[#17587f] text-white border-[#17587f] shadow-lg' : 'bg-white text-slate-500 border-transparent hover:text-[#17587f]'}`}
+                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-[3px] flex items-center justify-center gap-2 ${selectedSession === 'AM' ? 'bg-[#17587f] text-white border-[#101010]' : 'bg-white text-[#101010] border-[#101010]'}`}
+                  style={{ boxShadow: '3px 3px 0 #101010' }}
                 >
                   🌅 早上場 (9:00-12:00)
                 </button>
                 <button
                   onClick={() => setSelectedSession('PM')}
-                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-2 flex items-center justify-center gap-2 ${selectedSession === 'PM' ? 'bg-[#17587f] text-white border-[#17587f] shadow-lg' : 'bg-white text-slate-500 border-transparent hover:text-[#17587f]'}`}
+                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-[3px] flex items-center justify-center gap-2 ${selectedSession === 'PM' ? 'bg-[#17587f] text-white border-[#101010]' : 'bg-white text-[#101010] border-[#101010]'}`}
+                  style={{ boxShadow: '3px 3px 0 #101010' }}
                 >
                   🌙 晚上場 (19:00-21:20)
                 </button>
@@ -1220,7 +1222,12 @@ export default function Home() {
               {(isCheckInMode ? TYPE_ORDER : SESSION_TYPES[selectedSession]).map(typeId => {
                 const cfg = TYPE_CONFIG[typeId];
                 return (
-                  <button key={typeId} onClick={() => setSelectedType(typeId)} className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${selectedType === typeId ? 'bg-[#fdf3d4] text-[#17587f] border-[#17587f]' : 'bg-white text-[#718096] border-transparent hover:text-[#17587f]'}`}>
+                  <button
+                    key={typeId}
+                    onClick={() => setSelectedType(typeId)}
+                    className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 border-[3px] flex flex-col items-center justify-center gap-1 ${selectedType === typeId ? 'bg-[#e8c23a] text-[#101010] border-[#101010]' : 'bg-white text-[#101010] border-[#101010]'}`}
+                    style={{ boxShadow: '2px 2px 0 #101010' }}
+                  >
                     <span className="text-base sm:text-2xl text-center leading-tight">{cfg.label}</span>
                     {!isCheckInMode && (
                       <span className={`text-xs sm:text-lg font-bold text-center ${capacitySettings[typeId] === 0 ? 'text-red-500' : 'text-[#17587f]'}`}>
@@ -1233,13 +1240,16 @@ export default function Home() {
             </div>
 
             {/* 看板 */}
-            <div className="bg-white border border-[#17587f]/20 rounded-2xl p-4 sm:p-6 text-center space-y-1 shadow-sm">
+            <div className="bg-white border-[3px] border-[#101010] rounded-2xl p-4 sm:p-6 text-center space-y-1" style={{ boxShadow: '3px 3px 0 #101010' }}>
               <div className="text-2xl sm:text-4xl font-black text-[#17587f] tracking-wide">⏰ 時間：{SESSION_TIMING[selectedType].boardTime}</div>
               <div className="text-sm sm:text-base text-red-500 font-bold">⚠️ 當天 {formatTimeVal(SESSION_TIMING[selectedType].cutoff)} 後即截止報名</div>
             </div>
 
             {/* 表單 / 點名區 */}
-            <div className={`p-5 sm:p-8 rounded-3xl shadow-xl border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#fdf3d4] border-[#e8c23a]'}`}>
+            <div
+              className={`p-5 sm:p-8 rounded-3xl transition-all ${isCheckInMode ? 'shadow-xl border bg-[#ffe8cc] border-[#ffd8a8]' : 'border-[3px] bg-[#17587f] border-[#101010]'}`}
+              style={!isCheckInMode ? { boxShadow: '4px 4px 0 #101010' } : undefined}
+            >
               {isCheckInMode ? (
                 !isAdminAuthenticated ? (
                   <div className="space-y-4 text-center">
@@ -1706,36 +1716,36 @@ export default function Home() {
                     {/* 🆕 身份改用 LINE 登入驗證，取代自己輸入姓名 */}
                     {!lineSession?.loggedIn ? (
                       <div className="text-center space-y-3 py-2">
-                        <p className="text-slate-600 font-bold text-sm sm:text-base">🔒 請先使用 LINE 登入才能報名（防止黑名單被繞過）</p>
-                        <a href="/api/line-login" className="inline-block w-full bg-[#06C755] hover:bg-[#05b34c] text-white p-4 rounded-2xl text-xl font-black shadow-md">
+                        <p className="text-white font-bold text-sm sm:text-base">🔒 請先使用 LINE 登入才能報名（防止黑名單被繞過）</p>
+                        <a href="/api/line-login" className="inline-block w-full bg-[#06C755] hover:bg-[#05b34c] text-white p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }}>
                           使用 LINE 登入
                         </a>
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-[#17587f]/20 p-3">
-                          <span className="font-black text-[#17587f] text-lg">✅ 已用 LINE 登入</span>
-                          <a href="/api/logout" className="text-base font-bold text-slate-400 hover:text-slate-600 underline">登出</a>
+                        <div className="flex items-center justify-between bg-[#e8c23a] rounded-2xl border-[3px] border-[#101010] p-3">
+                          <span className="font-black text-[#101010] text-lg">✅ 已用 LINE 登入</span>
+                          <a href="/api/logout" className="text-base font-bold text-[#3a3a1a] hover:text-[#101010] underline">登出</a>
                         </div>
                         {userWarning && (
-                          <div className="mt-2 text-sm font-bold text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 shadow-sm">
+                          <div className="mt-2 text-sm font-bold text-amber-900 bg-amber-50 p-3 rounded-xl border-2 border-[#101010]">
                             {userWarning}
                           </div>
                         )}
                         {/* 🆕 顯示暱稱跟登入身份分開：LINE 帳號只用來做身份驗證（黑名單/白名單），
                             這裡讓你自己打一個別人會看到的暱稱，不用是你的 LINE 真實名稱 */}
                         <input
-                          className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#17587f]"
+                          className="w-full p-4 bg-white rounded-2xl border-[3px] border-[#101010] text-xl focus:outline-none focus:border-[#e8c23a]"
                           placeholder="輸入暱稱或代號"
                           value={form.name}
                           onChange={e => setForm({...form, name: e.target.value})}
                         />
-                        <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#17587f]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
+                        <select className="w-full p-4 bg-white rounded-2xl border-[3px] border-[#101010] text-xl focus:outline-none focus:border-[#e8c23a]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
                           {Array.from({ length: currentTypeConfig.perSubmitMax }, (_, i) => i + 1).map(n => (
                             <option key={n} value={n}>{n} 位</option>
                           ))}
                         </select>
-                        <button className="w-full bg-[#17587f] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
+                        <button className="w-full bg-[#e8c23a] text-[#101010] p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }} onClick={submit}>確認報名</button>
                       </>
                     )}
                   </div>
@@ -1764,7 +1774,10 @@ export default function Home() {
                 // 🆕 審核中的人顯示「⏳審核中」標籤，取代正取/備取/已到場顯示
                 const isPending = item.review_status === 'pending';
                 return (
-                  <div key={item.id} className={`p-4 sm:p-6 rounded-2xl flex justify-between items-center shadow-sm border ${isPending ? 'bg-amber-50 border-amber-300 border-dashed' : item.arrived ? 'bg-green-100 border-green-300' : item.isPromoted ? 'bg-[#e6fcf5] border-[#63e6be]' : 'bg-white border-slate-100'}`}>
+                  <div
+                    className={`p-4 sm:p-6 rounded-2xl flex justify-between items-center ${isPending ? 'shadow-sm border bg-amber-50 border-amber-300 border-dashed' : item.arrived ? 'shadow-sm border bg-green-100 border-green-300' : item.isPromoted ? 'shadow-sm border bg-[#e6fcf5] border-[#63e6be]' : 'border-[3px] bg-white border-[#101010]'}`}
+                    style={(!isPending && !item.arrived && !item.isPromoted) ? { boxShadow: '3px 3px 0 #101010' } : undefined}
+                  >
                     <span className="text-xl sm:text-3xl font-bold flex items-center flex-wrap gap-2">
                       {isPending ? (
                         <span className="bg-amber-400 text-slate-900 text-xs sm:text-sm px-2.5 py-1 rounded-full font-bold">⏳ 審核中</span>
@@ -1777,7 +1790,7 @@ export default function Home() {
                       {item.name} <span className="text-sm font-normal text-slate-400">({item.count}位)</span>
                     </span>
                     {lineSession?.loggedIn && item.line_user_id === lineSession.lineUserId && (
-                      <button className="text-red-500 text-sm font-bold bg-red-50 px-3 py-1.5 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
+                      <button className="text-white text-sm font-bold bg-[#c0392b] px-3 py-1.5 rounded-xl border-2 border-[#101010]" onClick={() => handleDelete(item)}>取消</button>
                     )}
                   </div>
                 );
