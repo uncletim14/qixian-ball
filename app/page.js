@@ -1093,13 +1093,20 @@ export default function Home() {
         <div className="h-4"></div>
 
         {/* 🌟 大標題與活潑視覺排版 🌟 */}
-        <div className={`text-center p-6 sm:p-8 rounded-3xl shadow-lg border-2 transition-all ${isSelfCheckIn ? 'bg-[#e6fcf5] border-[#63e6be]' : isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
+        <div
+          className={`text-center p-6 sm:p-8 rounded-3xl transition-all ${isSelfCheckIn ? 'shadow-lg border-2 bg-[#e6fcf5] border-[#63e6be]' : isCheckInMode ? 'shadow-lg border-2 bg-[#ffe8cc] border-[#ffd8a8]' : 'border-[3px] bg-[#fdf3d4] border-[#101010]'}`}
+          style={(!isSelfCheckIn && !isCheckInMode) ? { boxShadow: '4px 4px 0 #101010' } : undefined}
+        >
 
-          <h1 className={`text-3xl sm:text-5xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#0070C0]'}`}>
+          {!isSelfCheckIn && !isCheckInMode && (
+            <img src="/七賢匹克球LOGO.png" alt="七賢匹克 LOGO" className="w-16 h-16 sm:w-20 sm:h-20 object-contain mx-auto mb-2" />
+          )}
+
+          <h1 className={`text-3xl sm:text-5xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#17587f]'}`}>
             七賢匹克周末球敘<span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">團</span>
           </h1>
 
-          <div className={`border-t-2 border-dashed pt-4 mt-4 sm:mt-6 space-y-3 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#b6d7a8]'}`}>
+          <div className={`border-t-2 border-dashed pt-4 mt-4 sm:mt-6 space-y-3 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#e8c23a]'}`}>
             {isSelfCheckIn ? (
               <p className="text-[#0ca678] text-base sm:text-xl font-extrabold tracking-wide animate-pulse">
                 📱 現場自助報到專區 (早上場 8:30-12:00 / 晚上散打 18:30-21:00)
@@ -1112,19 +1119,19 @@ export default function Home() {
               <>
                 {/* 活潑標籤區塊 */}
                 <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 text-base sm:text-xl font-extrabold">
-                  <span className="bg-white/80 text-[#0070C0] px-4 py-2 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1.5">
+                  <span className="bg-white/80 text-[#17587f] px-4 py-2 rounded-full shadow-sm border border-[#17587f]/20 flex items-center gap-1.5">
                     🎽 1人 $100
                   </span>
-                  <span className="bg-white/80 text-[#0070C0] px-4 py-2 rounded-full shadow-sm border border-[#0070C0]/20 flex items-center gap-1.5">
+                  <span className="bg-white/80 text-[#17587f] px-4 py-2 rounded-full shadow-sm border border-[#17587f]/20 flex items-center gap-1.5">
                     🏓 租借球拍 $50
                   </span>
-                  <span className="bg-emerald-500 text-white px-4 py-2 rounded-full shadow-sm flex items-center gap-1.5">
+                  <span className="bg-[#e8c23a] text-[#101010] px-4 py-2 rounded-full shadow-sm border-2 border-[#101010] flex items-center gap-1.5">
                     🎁 新手體驗免費
                   </span>
                 </div>
 
                 {/* 🆕 本場次日期（時間已在下方時段區塊顯示，這裡不重複） */}
-                <p className="text-[#0070C0] text-lg sm:text-2xl font-black tracking-wide pt-1">
+                <p className="text-[#17587f] text-lg sm:text-2xl font-black tracking-wide pt-1">
                   📅 本場次：週六 {activeDate}
                 </p>
 
@@ -1195,13 +1202,13 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setSelectedSession('AM')}
-                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-2 flex items-center justify-center gap-2 ${selectedSession === 'AM' ? 'bg-[#0070C0] text-white border-[#0070C0] shadow-lg' : 'bg-white text-slate-500 border-transparent hover:text-[#0070C0]'}`}
+                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-2 flex items-center justify-center gap-2 ${selectedSession === 'AM' ? 'bg-[#17587f] text-white border-[#17587f] shadow-lg' : 'bg-white text-slate-500 border-transparent hover:text-[#17587f]'}`}
                 >
                   🌅 早上場 (9:00-12:00)
                 </button>
                 <button
                   onClick={() => setSelectedSession('PM')}
-                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-2 flex items-center justify-center gap-2 ${selectedSession === 'PM' ? 'bg-[#0070C0] text-white border-[#0070C0] shadow-lg' : 'bg-white text-slate-500 border-transparent hover:text-[#0070C0]'}`}
+                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-2 flex items-center justify-center gap-2 ${selectedSession === 'PM' ? 'bg-[#17587f] text-white border-[#17587f] shadow-lg' : 'bg-white text-slate-500 border-transparent hover:text-[#17587f]'}`}
                 >
                   🌙 晚上場 (19:00-21:20)
                 </button>
@@ -1213,10 +1220,10 @@ export default function Home() {
               {(isCheckInMode ? TYPE_ORDER : SESSION_TYPES[selectedSession]).map(typeId => {
                 const cfg = TYPE_CONFIG[typeId];
                 return (
-                  <button key={typeId} onClick={() => setSelectedType(typeId)} className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${selectedType === typeId ? 'bg-[#D9EAD3] text-[#0070C0] border-[#0070C0]' : 'bg-white text-[#718096] border-transparent hover:text-[#0070C0]'}`}>
+                  <button key={typeId} onClick={() => setSelectedType(typeId)} className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 shadow-sm ${selectedType === typeId ? 'bg-[#fdf3d4] text-[#17587f] border-[#17587f]' : 'bg-white text-[#718096] border-transparent hover:text-[#17587f]'}`}>
                     <span className="text-base sm:text-2xl text-center leading-tight">{cfg.label}</span>
                     {!isCheckInMode && (
-                      <span className={`text-xs sm:text-lg font-bold text-center ${capacitySettings[typeId] === 0 ? 'text-red-500' : 'text-[#0070C0]'}`}>
+                      <span className={`text-xs sm:text-lg font-bold text-center ${capacitySettings[typeId] === 0 ? 'text-red-500' : 'text-[#17587f]'}`}>
                         {capacitySettings[typeId] === 0 ? '❌ 本區未開放' : `(開放報名(限${capacitySettings[typeId]}位))`}
                       </span>
                     )}
@@ -1226,13 +1233,13 @@ export default function Home() {
             </div>
 
             {/* 看板 */}
-            <div className="bg-white border border-[#0070C0]/20 rounded-2xl p-4 sm:p-6 text-center space-y-1 shadow-sm">
-              <div className="text-2xl sm:text-4xl font-black text-[#0070C0] tracking-wide">⏰ 時間：{SESSION_TIMING[selectedType].boardTime}</div>
+            <div className="bg-white border border-[#17587f]/20 rounded-2xl p-4 sm:p-6 text-center space-y-1 shadow-sm">
+              <div className="text-2xl sm:text-4xl font-black text-[#17587f] tracking-wide">⏰ 時間：{SESSION_TIMING[selectedType].boardTime}</div>
               <div className="text-sm sm:text-base text-red-500 font-bold">⚠️ 當天 {formatTimeVal(SESSION_TIMING[selectedType].cutoff)} 後即截止報名</div>
             </div>
 
             {/* 表單 / 點名區 */}
-            <div className={`p-5 sm:p-8 rounded-3xl shadow-xl border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#D9EAD3] border-[#b6d7a8]'}`}>
+            <div className={`p-5 sm:p-8 rounded-3xl shadow-xl border transition-all ${isCheckInMode ? 'bg-[#ffe8cc] border-[#ffd8a8]' : 'bg-[#fdf3d4] border-[#e8c23a]'}`}>
               {isCheckInMode ? (
                 !isAdminAuthenticated ? (
                   <div className="space-y-4 text-center">
@@ -1706,8 +1713,8 @@ export default function Home() {
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-[#0070C0]/20 p-3">
-                          <span className="font-black text-[#0070C0] text-lg">✅ 已用 LINE 登入</span>
+                        <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-[#17587f]/20 p-3">
+                          <span className="font-black text-[#17587f] text-lg">✅ 已用 LINE 登入</span>
                           <a href="/api/logout" className="text-base font-bold text-slate-400 hover:text-slate-600 underline">登出</a>
                         </div>
                         {userWarning && (
@@ -1718,17 +1725,17 @@ export default function Home() {
                         {/* 🆕 顯示暱稱跟登入身份分開：LINE 帳號只用來做身份驗證（黑名單/白名單），
                             這裡讓你自己打一個別人會看到的暱稱，不用是你的 LINE 真實名稱 */}
                         <input
-                          className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]"
+                          className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#17587f]"
                           placeholder="輸入暱稱或代號"
                           value={form.name}
                           onChange={e => setForm({...form, name: e.target.value})}
                         />
-                        <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#0070C0]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
+                        <select className="w-full p-4 bg-white rounded-2xl border-2 text-xl focus:outline-none focus:border-[#17587f]" value={form.count} onChange={e => setForm({...form, count: e.target.value})}>
                           {Array.from({ length: currentTypeConfig.perSubmitMax }, (_, i) => i + 1).map(n => (
                             <option key={n} value={n}>{n} 位</option>
                           ))}
                         </select>
-                        <button className="w-full bg-[#0070C0] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
+                        <button className="w-full bg-[#17587f] text-white p-4 rounded-2xl text-xl font-black hover:bg-[#005a9c]" onClick={submit}>確認報名</button>
                       </>
                     )}
                   </div>
@@ -1740,7 +1747,7 @@ export default function Home() {
 
         {/* 正取名單區塊 */}
         <div className="space-y-4">
-          <h2 className="text-2xl sm:text-4xl font-black text-[#0070C0] px-2">正取名單 ({currentTotal} / {maxSeatsLimit})</h2>
+          <h2 className="text-2xl sm:text-4xl font-black text-[#17587f] px-2">正取名單 ({currentTotal} / {maxSeatsLimit})</h2>
 
           {hasPromotedSeats && (
             <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-4 rounded-2xl text-[#0ca678] font-bold text-sm sm:text-base flex items-center gap-2 shadow-sm animate-pulse">
@@ -1805,7 +1812,7 @@ export default function Home() {
       {showQrModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 sm:p-8 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl">
-            <h3 className="text-2xl font-black text-[#0070C0]">請球友掃描 QR Code 報到</h3>
+            <h3 className="text-2xl font-black text-[#17587f]">請球友掃描 QR Code 報到</h3>
             <p className="text-slate-500 text-sm">開放時間：早上場 8:30-12:00 / 晚上散打 18:30-21:00</p>
             <div className="flex justify-center p-2 bg-slate-50 rounded-2xl border">
               <img src={qrCodeImageUrl} alt="報到 QR Code" className="w-60 h-60" />
