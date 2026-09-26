@@ -151,8 +151,9 @@ export default function Home() {
   // 🆕 管理員面板用：(可選)更新密碼
   const [membersOnlyPasswordInput, setMembersOnlyPasswordInput] = useState('');
 
-  // 🆕 因雨取消狀態（以日期本身為 key，整天生效，不分區域）
-  const [isCancelled, setIsCancelled] = useState(false);
+  // 🆕 因雨取消狀態：改成早上場／晚上場分開記錄，因為星期六早上晚上是不同時段，
+  //    可能只有一邊因雨取消（例如早上下雨取消，晚上場照常）
+  const [cancelledSessions, setCancelledSessions] = useState({ AM: false, PM: false });
 
   // 🆕 六個分區的人數上限（即時生效，跟著 activeDate 走，用於實際報名判斷）
   const [capacitySettings, setCapacitySettings] = useState(DEFAULT_CAPACITY);
@@ -267,6 +268,11 @@ export default function Home() {
 
   const currentSessionId = `${activeDate}_${selectedType}`;
 
+  // 🆕 依目前選擇的分區（selectedType）判斷屬於早上場還是晚上場（_pm 結尾＝晚上），
+  //    藉此得知「目前這個場次」是否因雨取消，取代舊版整天共用一個 isCancelled 的作法
+  const currentSessionKey = selectedType && selectedType.endsWith('_pm') ? 'PM' : 'AM';
+  const isCancelled = cancelledSessions[currentSessionKey];
+
   useEffect(() => {
     setForm(prev => ({ ...prev, count: '1' }));
   }, [selectedType]);
@@ -337,8 +343,11 @@ export default function Home() {
   };
 
   const fetchEventStatus = async () => {
-    const { data } = await supabase.from('event_status').select('is_cancelled').eq('date_key', activeDate).maybeSingle();
-    setIsCancelled(data?.is_cancelled || false);
+    // 🆕 改成一次查詢早上／晚上兩筆各自的因雨取消狀態
+    const { data } = await supabase.from('event_status').select('date_key, is_cancelled').in('date_key', [`${activeDate}_AM`, `${activeDate}_PM`]);
+    const amRow = data?.find(r => r.date_key === `${activeDate}_AM`);
+    const pmRow = data?.find(r => r.date_key === `${activeDate}_PM`);
+    setCancelledSessions({ AM: amRow?.is_cancelled || false, PM: pmRow?.is_cancelled || false });
   };
 
   // 🆕 讀取「目前開放報名的這個星期六」六個分區的人數上限，即時生效用，沒有設定過就用預設值
@@ -803,20 +812,21 @@ export default function Home() {
     fetchBlacklistEntries();
   };
 
-  // 🆕 因雨取消切換
-  const handleToggleRainCancellation = async () => {
-    const nextStatus = !isCancelled;
+  // 🆕 因雨取消切換：改成分早上場／晚上場分開設定
+  const handleToggleRainCancellation = async (session) => {
+    const nextStatus = !cancelledSessions[session];
+    const sessionLabel = session === 'AM' ? '早上場' : '晚上場';
     const actionText = nextStatus ? '【因雨取消】' : '【球敘正常】';
-    if (!confirm(`確定要將 ${activeDate} 場次設定為 ${actionText} 嗎？`)) return;
+    if (!confirm(`確定要將 ${activeDate} ${sessionLabel} 設定為 ${actionText} 嗎？`)) return;
 
-    const { error } = await supabase.from('event_status').upsert({ date_key: activeDate, is_cancelled: nextStatus }, { onConflict: 'date_key' });
+    const { error } = await supabase.from('event_status').upsert({ date_key: `${activeDate}_${session}`, is_cancelled: nextStatus }, { onConflict: 'date_key' });
     if (error) {
       alert(`設定失敗：${error.message}`);
       return;
     }
 
-    setIsCancelled(nextStatus);
-    alert(`已將 ${activeDate} 變更為 ${actionText}！`);
+    setCancelledSessions(prev => ({ ...prev, [session]: nextStatus }));
+    alert(`已將 ${activeDate} ${sessionLabel} 變更為 ${actionText}！`);
   };
 
   // 報名提交
@@ -833,7 +843,7 @@ export default function Home() {
     }
 
     if (isCancelled) {
-      alert('⛈️ 本場次因雨取消，暫停報名！');
+      alert(`⛈️ 本場次（${currentSessionKey === 'AM' ? '早上場' : '晚上場'}）因雨取消，暫停報名！`);
       return;
     }
 
@@ -1014,9 +1024,9 @@ export default function Home() {
   const handleSettleNoShow = async () => {
     if (!confirm(`確定要結算【${activeDate}】場次的未報到名單嗎？未報到的正取球友將會被記錄缺席 1 次。`)) return;
 
-    // 🆕 因雨取消的場次不應該結算未到場（不是球友的錯）
+    // 🆕 因雨取消的場次不應該結算未到場（不是球友的錯），依目前管理員選擇檢視的分區判斷早上/晚上場
     if (isCancelled) {
-      alert('⛈️ 本場次已因雨取消，不需要（也不應該）結算未到場紀錄。');
+      alert(`⛈️ 本場次（${currentSessionKey === 'AM' ? '早上場' : '晚上場'}）已因雨取消，不需要（也不應該）結算未到場紀錄。`);
       return;
     }
 
@@ -1150,10 +1160,10 @@ export default function Home() {
             </div>
           )}
 
-          {/* 🆕 因雨取消狀態提示（非管理員模式時顯示） */}
+          {/* 🆕 因雨取消狀態提示（非管理員模式時顯示，依目前選擇的早上/晚上場分開判斷） */}
           {!isCheckInMode && !isSelfCheckIn && isCancelled && (
             <div className="mt-4 bg-red-500/10 border-2 border-red-400 text-red-600 rounded-2xl px-4 py-3 font-black text-sm sm:text-lg">
-              ⛈️ 本場次因雨取消，暫停報名！已報名球友不計缺席
+              ⛈️ 本場次（{currentSessionKey === 'AM' ? '早上場' : '晚上場'}）因雨取消，暫停報名！已報名球友不計缺席
             </div>
           )}
         </div>
@@ -1305,13 +1315,21 @@ export default function Home() {
                       📷 顯示現場報到用 QR Code
                     </button>
 
-                    {/* 🆕 因雨取消切換按鈕 */}
-                    <button
-                      onClick={handleToggleRainCancellation}
-                      className={`w-full p-3 rounded-2xl font-bold text-lg shadow ${isCancelled ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
-                    >
-                      {isCancelled ? '⛈️ 因雨取消中（點擊恢復正常）' : '🟢 球敘正常（點擊設為因雨取消）'}
-                    </button>
+                    {/* 🆕 因雨取消切換按鈕：早上場／晚上場分開設定 */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleToggleRainCancellation('AM')}
+                        className={`p-3 rounded-2xl font-bold text-sm sm:text-lg shadow ${cancelledSessions.AM ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                      >
+                        {cancelledSessions.AM ? '⛈️ 早上場因雨取消中' : '🌅 早上場正常（點擊取消）'}
+                      </button>
+                      <button
+                        onClick={() => handleToggleRainCancellation('PM')}
+                        className={`p-3 rounded-2xl font-bold text-sm sm:text-lg shadow ${cancelledSessions.PM ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                      >
+                        {cancelledSessions.PM ? '⛈️ 晚上場因雨取消中' : '🌙 晚上場正常（點擊取消）'}
+                      </button>
+                    </div>
 
                     {/* 🆕 會員限定報名設定：固定規則，每週三晚上 22:00 自動開放，密碼固定不用每週改 */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
@@ -1676,7 +1694,7 @@ export default function Home() {
                 isCancelled ? (
                   <div className="text-center py-6 space-y-2">
                     <p className="text-2xl font-black text-red-600">⛈️ 本場次因雨取消</p>
-                    <p className="text-sm font-bold text-slate-500">本場次已因雨取消，暫停報名，請留意後續開放通知</p>
+                    <p className="text-sm font-bold text-slate-500">{currentSessionKey === 'AM' ? '早上場' : '晚上場'}已因雨取消，暫停報名，請留意後續開放通知</p>
                   </div>
                 ) : isCurrentTypeClosed ? (
                   <div className="text-center py-6 space-y-2">
