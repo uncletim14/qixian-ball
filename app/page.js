@@ -816,7 +816,7 @@ export default function Home() {
   const handleToggleRainCancellation = async (session) => {
     const nextStatus = !cancelledSessions[session];
     const sessionLabel = session === 'AM' ? '早上場' : '晚上場';
-    const actionText = nextStatus ? '【因雨取消】' : '【球敘正常】';
+    const actionText = nextStatus ? '【因雨取消或其他原因取消】' : '【球敘正常】';
     if (!confirm(`確定要將 ${activeDate} ${sessionLabel} 設定為 ${actionText} 嗎？`)) return;
 
     const { error } = await supabase.from('event_status').upsert({ date_key: `${activeDate}_${session}`, is_cancelled: nextStatus }, { onConflict: 'date_key' });
@@ -843,7 +843,7 @@ export default function Home() {
     }
 
     if (isCancelled) {
-      alert(`⛈️ 本場次（${currentSessionKey === 'AM' ? '早上場' : '晚上場'}）因雨取消，暫停報名！`);
+      alert(`⛈️ 本場次（${currentSessionKey === 'AM' ? '早上場' : '晚上場'}）因雨取消或其他原因取消，暫停報名！`);
       return;
     }
 
@@ -1026,7 +1026,7 @@ export default function Home() {
 
     // 🆕 因雨取消的場次不應該結算未到場（不是球友的錯），依目前管理員選擇檢視的分區判斷早上/晚上場
     if (isCancelled) {
-      alert(`⛈️ 本場次（${currentSessionKey === 'AM' ? '早上場' : '晚上場'}）已因雨取消，不需要（也不應該）結算未到場紀錄。`);
+      alert(`⛈️ 本場次（${currentSessionKey === 'AM' ? '早上場' : '晚上場'}）已因雨取消或其他原因取消，不需要（也不應該）結算未到場紀錄。`);
       return;
     }
 
@@ -1163,7 +1163,7 @@ export default function Home() {
           {/* 🆕 因雨取消狀態提示（非管理員模式時顯示，依目前選擇的早上/晚上場分開判斷） */}
           {!isCheckInMode && !isSelfCheckIn && isCancelled && (
             <div className="mt-4 bg-red-500/10 border-2 border-red-400 text-red-600 rounded-2xl px-4 py-3 font-black text-sm sm:text-lg">
-              ⛈️ 本場次（{currentSessionKey === 'AM' ? '早上場' : '晚上場'}）因雨取消，暫停報名！已報名球友不計缺席
+              ⛈️ 本場次（{currentSessionKey === 'AM' ? '早上場' : '晚上場'}）因雨取消或其他原因取消，暫停報名！已報名球友不計缺席
             </div>
           )}
         </div>
@@ -1321,13 +1321,13 @@ export default function Home() {
                         onClick={() => handleToggleRainCancellation('AM')}
                         className={`p-3 rounded-2xl font-bold text-sm sm:text-lg shadow ${cancelledSessions.AM ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
                       >
-                        {cancelledSessions.AM ? '⛈️ 早上場因雨取消中' : '🌅 早上場正常（點擊取消）'}
+                        {cancelledSessions.AM ? '⛈️ 早上場取消中（因雨/其他原因）' : '🌅 早上場正常（點擊取消）'}
                       </button>
                       <button
                         onClick={() => handleToggleRainCancellation('PM')}
                         className={`p-3 rounded-2xl font-bold text-sm sm:text-lg shadow ${cancelledSessions.PM ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
                       >
-                        {cancelledSessions.PM ? '⛈️ 晚上場因雨取消中' : '🌙 晚上場正常（點擊取消）'}
+                        {cancelledSessions.PM ? '⛈️ 晚上場取消中（因雨/其他原因）' : '🌙 晚上場正常（點擊取消）'}
                       </button>
                     </div>
 
@@ -1693,8 +1693,8 @@ export default function Home() {
               ) : (
                 isCancelled ? (
                   <div className="text-center py-6 space-y-2">
-                    <p className="text-2xl font-black text-red-600">⛈️ 本場次因雨取消</p>
-                    <p className="text-sm font-bold text-slate-500">{currentSessionKey === 'AM' ? '早上場' : '晚上場'}已因雨取消，暫停報名，請留意後續開放通知</p>
+                    <p className="text-2xl font-black text-red-600">⛈️ 本場次因雨取消或其他原因取消</p>
+                    <p className="text-sm font-bold text-slate-500">{currentSessionKey === 'AM' ? '早上場' : '晚上場'}已取消，暫停報名，請留意後續開放通知</p>
                   </div>
                 ) : isCurrentTypeClosed ? (
                   <div className="text-center py-6 space-y-2">
