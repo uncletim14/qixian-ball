@@ -926,8 +926,17 @@ export default function Home() {
       }
     }
 
-    // 🆕 查詢是否已在審核通過白名單中（用 LINE 使用者 ID 比對），決定 review_status
-    const { data: approvedRecord } = await supabase.from('approved_names').select('id').eq('line_user_id', myLineUserId).maybeSingle();
+    // 🆕 查詢是否已在審核通過白名單中：先比對 LINE 使用者 ID，
+    //    比對不到的話（例如舊資料當初只用姓名核准、line_user_id 是空的），退回用姓名比對，
+    //    避免已經審核過的舊資料被誤判成「首次報名」又要重審一次
+    let approvedRecord = null;
+    const { data: approvedByLineId } = await supabase.from('approved_names').select('id').eq('line_user_id', myLineUserId).maybeSingle();
+    if (approvedByLineId) {
+      approvedRecord = approvedByLineId;
+    } else {
+      const { data: approvedByName } = await supabase.from('approved_names').select('id').eq('name', trimmedName).maybeSingle();
+      approvedRecord = approvedByName;
+    }
     const reviewStatus = approvedRecord ? 'approved' : 'pending';
 
     const { error } = await supabase.from('pickleball_registrations').insert([{
