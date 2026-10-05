@@ -204,6 +204,23 @@ export default function Home() {
   useEffect(() => {
     if (selectedDow !== 6) setSelectedSession('PM');
   }, [selectedDow]);
+
+  // 🆕 選分區那一頁（group）要先顯示「目前報名名單」，不用輸入密碼就能看；
+  //    這裡抓取該場次四個分區的報名資料（只讀，沒有取消按鈕）
+  const [groupRegs, setGroupRegs] = useState([]);
+  useEffect(() => {
+    if (navStage !== 'group') return;
+    let stale = false;
+    const typeIds = SESSION_TYPES[selectedSession] || [];
+    supabase
+      .from('pickleball_registrations')
+      .select('id, name, count, session_id, arrived, review_status')
+      .in('session_id', typeIds.map(t => `${activeDate}_${t}`))
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .then(({ data }) => { if (!stale) setGroupRegs(data || []); });
+    return () => { stale = true; };
+  }, [navStage, selectedDow, selectedSession, activeDate]);
   const [list, setList] = useState([]);
   const [isCheckInMode, setIsCheckInMode] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -1359,12 +1376,19 @@ export default function Home() {
                   <button
                     key={o.dow}
                     onClick={() => handleSelectDay(o.dow)}
-                    className={`p-5 sm:p-7 rounded-3xl border-[3px] border-[#101010] flex flex-col items-center gap-1 transition-all ${ended ? 'bg-slate-100 text-slate-400' : 'bg-white text-[#101010] hover:bg-[#fdf3d4]'}`}
+                    className={`py-3 px-2 sm:py-4 rounded-3xl border-[3px] border-[#101010] flex flex-col items-center justify-center leading-tight transition-all ${ended ? 'bg-slate-100 text-slate-400' : 'bg-white text-[#101010] hover:bg-[#fdf3d4]'}`}
                     style={{ boxShadow: '4px 4px 0 #101010' }}
                   >
-                    <span className="text-3xl sm:text-4xl font-black">{o.label}</span>
-                    <span className="text-base sm:text-xl font-black text-[#17587f]">{dateStr.slice(5)}{ended ? '（已結束）' : ''}</span>
-                    <span className="text-xs sm:text-sm font-bold">{o.dow === 6 ? '早上 9:00-12:00 / 晚上 19:00-21:20' : '19:00-21:20'}</span>
+                    <span className="text-3xl sm:text-5xl font-black">{o.label}</span>
+                    <span className="text-3xl sm:text-5xl font-black text-[#17587f] mt-1">{dateStr.slice(5)}{ended ? <span className="text-base sm:text-xl">（已結束）</span> : ''}</span>
+                    {o.dow === 6 ? (
+                      <span className="text-lg sm:text-2xl font-black mt-1 flex flex-col items-center">
+                        <span>早上 9:00-12:00</span>
+                        <span>晚上 19:00-21:20</span>
+                      </span>
+                    ) : (
+                      <span className="text-lg sm:text-2xl font-black mt-1">19:00-21:20</span>
+                    )}
                   </button>
                 );
               })}
@@ -1406,6 +1430,57 @@ export default function Home() {
                   <span className="text-xs sm:text-sm font-bold">{ZONE_GROUPS[g].subs.map(sb => sb.label).join(' / ')}</span>
                 </button>
               ))}
+            </div>
+
+            {/* 🆕 目前報名名單（唯讀，不用密碼就能看） */}
+            <div className="space-y-3 pt-2">
+              <div className="text-2xl sm:text-3xl font-black text-[#17587f] px-1">📋 目前報名名單</div>
+              {['normal', 'experience', 'openplay', 'advanced'].map(base => {
+                const typeId = base + (selectedSession === 'PM' ? '_pm' : '');
+                const items = groupRegs.filter(r => r.session_id === `${activeDate}_${typeId}`);
+                const max = capacitySettings[typeId] ?? 0;
+                const { main, wait } = splitMainAndWaitList(items, max);
+                const confirmed = main.reduce((sum, it) => sum + (Number(it.count) || 0), 0);
+                const zoneLabel = ZONE_GROUPS[groupOfType(typeId)].label;
+                const subLabel = ZONE_GROUPS[groupOfType(typeId)].subs.find(sb => sb.key === base).label;
+                return (
+                  <div key={base} className="bg-white border-[3px] border-[#101010] rounded-2xl p-4 space-y-2" style={{ boxShadow: '3px 3px 0 #101010' }}>
+                    <div className="flex justify-between items-center flex-wrap gap-1">
+                      <span className="text-lg sm:text-2xl font-black text-[#101010]">
+                        {ZONE_GROUPS[groupOfType(typeId)].icon} {zoneLabel}・{subLabel}
+                      </span>
+                      <span className={`text-sm sm:text-lg font-black px-3 py-1 rounded-full border-2 border-[#101010] ${max === 0 ? 'bg-slate-100 text-red-500' : 'bg-[#e8c23a] text-[#101010]'}`}>
+                        {max === 0 ? '❌ 本區未開放' : `正取 ${confirmed} / ${max}`}
+                      </span>
+                    </div>
+                    {items.length === 0 ? (
+                      <div className="text-slate-400 font-bold text-sm sm:text-base">暫無報名</div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {main.map(it => (
+                          <div key={it.id} className="flex justify-between items-center bg-white border-2 border-[#101010] rounded-xl px-3 py-1.5">
+                            <span className="font-black text-lg sm:text-2xl text-[#101010]">
+                              {it.review_status === 'pending' && <span className="bg-amber-400 text-slate-900 text-xs sm:text-sm px-2 py-0.5 rounded-full font-bold mr-2">⏳審核中</span>}
+                              {it.name}
+                            </span>
+                            <span className="font-black text-[#17587f] text-base sm:text-xl">{it.count}位</span>
+                          </div>
+                        ))}
+                        {wait.map((it, i) => (
+                          <div key={it.id} className="flex justify-between items-center bg-[#fdf3d4] border-2 border-[#101010] rounded-xl px-3 py-1.5">
+                            <span className="font-black text-lg sm:text-2xl text-[#101010]">
+                              <span className="text-[#ff6d00] mr-2 text-base sm:text-lg">[備取 {i + 1}]</span>
+                              {it.review_status === 'pending' && <span className="bg-amber-400 text-slate-900 text-xs sm:text-sm px-2 py-0.5 rounded-full font-bold mr-2">⏳審核中</span>}
+                              {it.name}
+                            </span>
+                            <span className="font-black text-[#17587f] text-base sm:text-xl">{it.count}位</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
