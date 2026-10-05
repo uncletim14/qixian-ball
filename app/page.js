@@ -1346,10 +1346,10 @@ export default function Home() {
         >
 
           {!isSelfCheckIn && !isCheckInMode && (
-            <img src="/七賢匹克球LOGO.png" alt="七賢匹克 LOGO" className="w-16 h-16 sm:w-20 sm:h-20 object-contain mx-auto mb-2" />
+            <img src="/七賢匹克球LOGO.png" alt="七賢匹克 LOGO" className="w-28 h-28 sm:w-36 sm:h-36 object-contain mx-auto mb-2" />
           )}
 
-          <h1 className={`text-3xl sm:text-5xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#17587f]'}`}>
+          <h1 className={`text-2xl sm:text-4xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#17587f]'}`}>
             七賢匹克球敘團
           </h1>
 
