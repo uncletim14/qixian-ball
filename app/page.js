@@ -1349,34 +1349,55 @@ export default function Home() {
             <img src="/七賢匹克球LOGO.png" alt="七賢匹克 LOGO" className="w-28 h-28 sm:w-36 sm:h-36 object-contain mx-auto mb-2" />
           )}
 
-          <h1 className={`text-2xl sm:text-4xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#17587f]'}`}>
-            七賢匹克球敘團
-          </h1>
+          {isSelfCheckIn || isCheckInMode ? (
+            <>
+              <h1 className={`text-2xl sm:text-4xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : 'text-[#d94800]'}`}>
+                七賢匹克球敘團
+              </h1>
+              <div className={`border-t-2 border-dashed pt-4 mt-4 sm:mt-6 space-y-3 ${isSelfCheckIn ? 'border-[#63e6be]' : 'border-[#ffd8a8]'}`}>
+                {isSelfCheckIn ? (
+                  <p className="text-[#0ca678] text-base sm:text-xl font-extrabold tracking-wide animate-pulse">
+                    📱 現場自助報到專區 (早上場 8:30-12:00 / 晚上散打 18:30-21:00)
+                  </p>
+                ) : (
+                  <p className="text-[#d94800] text-base sm:text-xl font-extrabold tracking-wide">
+                    📱 管理員現場點名主控台
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* 🆕 手機版：標題第一個字對齊「1人 $100」左緣、最後一個字對齊「租借球拍 $50」右緣（標題與第一排標籤同寬） */}
+              <div className="w-fit mx-auto sm:w-full">
+                <h1 className="flex justify-between sm:justify-center sm:gap-5 text-3xl sm:text-6xl font-black leading-tight select-none drop-shadow-sm text-[#17587f]">
+                  {'七賢匹克球敘團'.split('').map((ch, i) => <span key={i}>{ch}</span>)}
+                </h1>
 
-          <div className={`border-t-2 border-dashed pt-4 mt-4 sm:mt-6 space-y-3 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#e8c23a]'}`}>
-            {isSelfCheckIn ? (
-              <p className="text-[#0ca678] text-base sm:text-xl font-extrabold tracking-wide animate-pulse">
-                📱 現場自助報到專區 (早上場 8:30-12:00 / 晚上散打 18:30-21:00)
-              </p>
-            ) : isCheckInMode ? (
-              <p className="text-[#d94800] text-base sm:text-xl font-extrabold tracking-wide">
-                📱 管理員現場點名主控台
-              </p>
-            ) : (
-              <>
-                {/* 活潑標籤區塊 */}
-                <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 text-base sm:text-xl font-extrabold">
-                  <span className="bg-white/80 text-[#17587f] px-4 py-2 rounded-full shadow-sm border border-[#17587f]/20 flex items-center gap-1.5">
-                    🎽 1人 $100
-                  </span>
-                  <span className="bg-white/80 text-[#17587f] px-4 py-2 rounded-full shadow-sm border border-[#17587f]/20 flex items-center gap-1.5">
-                    🏓 租借球拍 $50
-                  </span>
-                  <span className="bg-[#e8c23a] text-[#101010] px-4 py-2 rounded-full shadow-sm border-2 border-[#101010] flex items-center gap-1.5">
-                    🎁 新手體驗免費
-                  </span>
+                <div className="border-t-2 border-dashed border-[#e8c23a] pt-4 mt-4 sm:mt-6">
+                  {/* 活潑標籤區塊 */}
+                  <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 text-base sm:text-xl font-extrabold">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className="whitespace-nowrap bg-white/80 text-[#17587f] px-4 py-2 rounded-full shadow-sm border border-[#17587f]/20 flex items-center gap-1.5">
+                        🎽 1人 $100
+                      </span>
+                      <span className="whitespace-nowrap bg-white/80 text-[#17587f] px-4 py-2 rounded-full shadow-sm border border-[#17587f]/20 flex items-center gap-1.5">
+                        🏓 租借球拍 $50
+                      </span>
+                    </div>
+                    <span className="hidden sm:flex whitespace-nowrap bg-[#e8c23a] text-[#101010] px-4 py-2 rounded-full shadow-sm border-2 border-[#101010] items-center gap-1.5">
+                      🎁 新手體驗免費
+                    </span>
+                  </div>
                 </div>
+              </div>
+              <div className="sm:hidden flex justify-center mt-2">
+                <span className="whitespace-nowrap bg-[#e8c23a] text-[#101010] px-4 py-2 rounded-full shadow-sm border-2 border-[#101010] flex items-center gap-1.5 text-base font-extrabold">
+                  🎁 新手體驗免費
+                </span>
+              </div>
 
+              <div className="space-y-3 mt-3">
                 {/* 🆕 本場次日期（時間已在下方時段區塊顯示，這裡不重複） */}
                 <p className="text-[#17587f] text-lg sm:text-2xl font-black tracking-wide pt-1">
                   {showNav && stage === 'home' ? '📅 請選擇場次日期' : `📅 本場次：${DOW_LABEL[selectedDow]} ${activeDate}`}
@@ -1387,9 +1408,9 @@ export default function Home() {
                   <p className="flex items-center justify-center gap-1"><span>⏰</span> 網站報名每週六晚上 10 點更新下週報名</p>
                   <p>非會員星期三晚上 10 點後開放報名星期六球敘</p>
                 </div>
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
 
           {/* 🆕 會員限定期間提示（非管理員模式時顯示） */}
           {!isCheckInMode && !isSelfCheckIn && isMembersOnlyActive && (
