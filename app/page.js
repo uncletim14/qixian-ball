@@ -369,6 +369,8 @@ export default function Home() {
   }, [isSelfCheckIn, activeDate]);
 
   const handleSecretClick = () => {
+    // 🆕 隱藏的現場點名主控台已暫時關閉，改用 /my-portal-sat 後台。要重新開啟，把下一行 return 刪掉即可。
+    return;
     const newCount = clickCount + 1;
     if (newCount >= 3) {
       setIsCheckInMode(!isCheckInMode);
