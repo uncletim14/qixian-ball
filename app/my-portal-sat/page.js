@@ -12,7 +12,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ───────────────── 基本設定 ─────────────────
 // 四個分區（早上場／晚上場各一組，晚上場的 typeId 會加 _pm）
 const BASES = ['normal', 'experience', 'openplay', 'advanced'];
-const BASE_LABEL = { normal: '新手友善場', experience: '新手體驗', openplay: '一般散打', advanced: '2.8-3.3 球敘' };
+const BASE_LABEL = { normal: '新手友善場', experience: '新手體驗', openplay: '一般散打', advanced: '3.0以上 球敘' };
 const BASE_ICON = { normal: '🌱', experience: '🏸', openplay: '🔥', advanced: '🎯' };
 const BASE_GROUP = { normal: '新手區', experience: '新手區', openplay: '散打區', advanced: '散打區' };
 const PRICE = { normal: 100, experience: 0, openplay: 100, advanced: 100 };
@@ -37,7 +37,7 @@ function getDefaultCapacityFor(dateStr, session) {
       ? { experience: 9, normal: 8, openplay: 10, advanced: 10 }
       : { experience: 9, normal: 9, openplay: 9, advanced: 10 };
   }
-  // 週一/四/五（晚上場）：新手體驗0、新手友善9、一般散打18、2.8-3.3 球敘10
+  // 週一/四/五（晚上場）：新手體驗0、新手友善9、一般散打18、3.0以上 球敘10
   return { experience: 0, normal: 9, openplay: 18, advanced: 10 };
 }
 function capacityMap(row, dateStr) {
@@ -634,7 +634,7 @@ export default function SatAdminPortal() {
     let gReg = 0, gExtraIn = 0, gVenue = 0, gExtraOut = 0, gNet = 0;
     if (regDates.length > 0) {
       csv += '【打球日報名記帳】\n';
-      csv += '日期,新手友善場正取(到場),新手體驗正取(到場),一般散打正取(到場),2.8-3.3球敘正取(到場),報名費實收,現場附加收入,場地費支出,現場附加支出,當日純益\n';
+      csv += '日期,新手友善場正取(到場),新手體驗正取(到場),一般散打正取(到場),3.0以上球敘正取(到場),報名費實收,現場附加收入,場地費支出,現場附加支出,當日純益\n';
       regDates.forEach(d => {
         const cap = capacityMap(settingByDate[d], d);
         let regIncome = 0;
@@ -803,7 +803,7 @@ export default function SatAdminPortal() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-bold text-slate-700">🔥 散打區密碼（一般散打／2.8-3.3 球敘）</label>
+              <label className="text-sm font-bold text-slate-700">🔥 散打區密碼（一般散打／3.0以上 球敘）</label>
               <input
                 value={pwOpenplay}
                 onChange={e => setPwOpenplay(e.target.value)}
