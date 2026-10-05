@@ -1422,12 +1422,12 @@ export default function Home() {
                 <button
                   key={g}
                   onClick={() => handleSelectGroup(g)}
-                  className="p-6 sm:p-8 rounded-3xl border-[3px] border-[#101010] bg-[#e8c23a] text-[#101010] flex flex-col items-center gap-2"
+                  className="p-5 sm:p-6 rounded-3xl border-[3px] border-[#101010] bg-[#e8c23a] text-[#101010] flex flex-col items-center gap-1 sm:gap-2"
                   style={{ boxShadow: '4px 4px 0 #101010' }}
                 >
                   <span className="text-4xl">{ZONE_GROUPS[g].icon}</span>
-                  <span className="text-2xl sm:text-3xl font-black">{ZONE_GROUPS[g].label}</span>
-                  <span className="text-xs sm:text-sm font-bold">{ZONE_GROUPS[g].subs.map(sb => sb.label).join(' / ')}</span>
+                  <span className="text-3xl sm:text-5xl font-black">{ZONE_GROUPS[g].label}</span>
+                  <span className="text-base sm:text-2xl font-black text-center leading-snug">{ZONE_GROUPS[g].subs.map(sb => sb.label).join(' / ')}</span>
                 </button>
               ))}
             </div>
