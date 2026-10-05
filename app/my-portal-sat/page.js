@@ -726,7 +726,7 @@ export default function SatAdminPortal() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800">
+    <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800" style={{ zoom: 1.4 }}>
       <div className="max-w-5xl mx-auto space-y-8">
 
         {/* 頂部控制區 */}
