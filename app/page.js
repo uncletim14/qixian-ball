@@ -1252,6 +1252,33 @@ export default function Home() {
     fetchAllZoneLists(activeDate);
   };
 
+  // 🆕 修改人數：只能改自己（LINE 帳號）的報名，1~4 位
+  const handleEditCount = async (item) => {
+    if (!lineSession?.loggedIn || item.line_user_id !== lineSession.lineUserId) {
+      alert('🔒 只能修改您自己（LINE 帳號）建立的報名！');
+      return;
+    }
+    const input = prompt(`【${item.name}】目前報名 ${item.count} 位，請輸入新的人數（1~4）：`, String(item.count));
+    if (input === null) return;
+    const n = parseInt(input, 10);
+    if (!Number.isInteger(n) || n < 1 || n > 4) {
+      alert('❌ 人數請輸入 1 到 4 之間的數字！');
+      return;
+    }
+    if (n === item.count) return;
+    const { data, error } = await supabase
+      .from('pickleball_registrations')
+      .update({ count: n })
+      .eq('id', item.id)
+      .eq('line_user_id', lineSession.lineUserId)
+      .select();
+    if (error) { alert('系統錯誤：' + error.message); return; }
+    if (!data || data.length === 0) { alert('❌ 修改失敗，請重新整理頁面後再試一次！'); return; }
+    alert(`✅ 已將人數修改為 ${n} 位！（若名額不足，可能會自動轉為備取）`);
+    refreshData();
+    fetchAllZoneLists(activeDate);
+  };
+
   // 🆕 導覽相關的衍生狀態與操作
   const showNav = !isCheckInMode && !isSelfCheckIn;
   const groupUnlocked = !!(selectedGroup && zonePasswords[selectedGroup]);
@@ -1467,7 +1494,7 @@ export default function Home() {
                           </div>
                         ))}
                         {wait.map((it, i) => (
-                          <div key={it.id} className="flex justify-between items-center bg-[#fdf3d4] border-2 border-[#101010] rounded-xl px-3 py-1.5">
+                          <div key={it.id} className="flex justify-between items-center bg-[#f5c451] border-2 border-[#101010] rounded-xl px-3 py-1.5">
                             <span className="font-black text-lg sm:text-2xl text-[#101010]">
                               <span className="text-[#ff6d00] mr-2 text-base sm:text-lg">[備取 {i + 1}]</span>
                               {it.review_status === 'pending' && <span className="bg-amber-400 text-slate-900 text-xs sm:text-sm px-2 py-0.5 rounded-full font-bold mr-2">⏳審核中</span>}
@@ -2177,7 +2204,10 @@ export default function Home() {
                       {item.name} <span className="text-sm font-normal text-slate-400">({item.count}位)</span>
                     </span>
                     {lineSession?.loggedIn && item.line_user_id === lineSession.lineUserId && (
-                      <button className="text-white text-sm font-bold bg-[#c0392b] px-3 py-1.5 rounded-xl border-2 border-[#101010]" onClick={() => handleDelete(item)}>取消</button>
+                      <span className="flex gap-2 shrink-0">
+                        <button className="text-[#101010] text-sm font-bold bg-[#e8c23a] px-3 py-1.5 rounded-xl border-2 border-[#101010]" onClick={() => handleEditCount(item)}>改人數</button>
+                        <button className="text-white text-sm font-bold bg-[#c0392b] px-3 py-1.5 rounded-xl border-2 border-[#101010]" onClick={() => handleDelete(item)}>取消</button>
+                      </span>
                     )}
                   </div>
                 );
@@ -2198,7 +2228,10 @@ export default function Home() {
                     <span className="text-[#ff6d00] mr-2">[備取 {index + 1}]</span>{item.name} ({item.count}位)
                   </span>
                   {lineSession?.loggedIn && item.line_user_id === lineSession.lineUserId && (
-                    <button className="text-red-500 text-sm bg-red-50 px-3 py-1.5 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
+                    <span className="flex gap-2 shrink-0">
+                      <button className="text-[#101010] text-sm font-bold bg-[#e8c23a] px-3 py-1.5 rounded-xl border-2 border-[#101010]" onClick={() => handleEditCount(item)}>改人數</button>
+                      <button className="text-red-500 text-sm bg-red-50 px-3 py-1.5 rounded-xl" onClick={() => handleDelete(item)}>取消</button>
+                    </span>
                   )}
                 </div>
               ))}
