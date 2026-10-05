@@ -726,7 +726,8 @@ export default function SatAdminPortal() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800" style={{ zoom: 1.4 }}>
+    <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800" style={{ zoom: 1.15, fontFamily: "'Inter', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');`}</style>
       <div className="max-w-5xl mx-auto space-y-8">
 
         {/* 頂部控制區 */}
