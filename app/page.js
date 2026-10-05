@@ -63,16 +63,16 @@ function getSaturdayDateRange(pastCount, futureCount) {
   return result;
 }
 
-// 🆕 八個分區設定（早上/晚上各四個：新手體驗、新手友善場、一般散打、2.8-3.3 球敘）
+// 🆕 八個分區設定（早上/晚上各四個：新手體驗、新手友善場、一般散打、3.0以上 球敘）
 const TYPE_CONFIG = {
   experience: { label: '新手體驗', perSubmitMax: 4 },
   normal: { label: '新手友善場', perSubmitMax: 4 },
   openplay: { label: '一般散打', perSubmitMax: 4 },
-  advanced: { label: '2.8-3.3 球敘', perSubmitMax: 4 },
+  advanced: { label: '3.0以上 球敘', perSubmitMax: 4 },
   experience_pm: { label: '新手體驗(晚上)', perSubmitMax: 4 },
   normal_pm: { label: '新手友善場(晚上)', perSubmitMax: 4 },
   openplay_pm: { label: '一般散打(晚上)', perSubmitMax: 4 },
-  advanced_pm: { label: '2.8-3.3 球敘(晚上)', perSubmitMax: 4 }
+  advanced_pm: { label: '3.0以上 球敘(晚上)', perSubmitMax: 4 }
 };
 const TYPE_ORDER = ['experience', 'normal', 'openplay', 'advanced', 'experience_pm', 'normal_pm', 'openplay_pm', 'advanced_pm'];
 // 🆕 各分區每人收費金額（新手體驗免費，其餘皆 $100/人），供自動帶入報名費收入使用
@@ -82,7 +82,7 @@ const SESSION_TYPES = {
   PM: ['experience_pm', 'normal_pm', 'openplay_pm', 'advanced_pm']
 };
 const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10, advanced: 10, experience_pm: 9, normal_pm: 9, openplay_pm: 9, advanced_pm: 10 };
-// 🆕 週一/週四/週五（都是晚上場）的永久預設人數：新手體驗0、新手友善9、一般散打18、2.8-3.3 球敘10
+// 🆕 週一/週四/週五（都是晚上場）的永久預設人數：新手體驗0、新手友善9、一般散打18、3.0以上 球敘10
 const WEEKDAY_PM_DEFAULT_CAPACITY = { experience_pm: 0, normal_pm: 9, openplay_pm: 18, advanced_pm: 10 };
 function getDefaultCapacity(dateKey) {
   const [y, m, d] = String(dateKey).split('/').map(Number);
@@ -100,7 +100,7 @@ const DOW_OPTIONS = [
 const DOW_LABEL = { 1: '週一', 4: '週四', 5: '週五', 6: '週六' };
 const ZONE_GROUPS = {
   newbie: { label: '新手區', icon: '🌱', subs: [{ key: 'normal', label: '新手友善場' }, { key: 'experience', label: '新手體驗' }] },
-  openplay: { label: '散打區', icon: '🔥', subs: [{ key: 'openplay', label: '一般散打' }, { key: 'advanced', label: '2.8-3.3 球敘' }] }
+  openplay: { label: '散打區', icon: '🔥', subs: [{ key: 'openplay', label: '一般散打' }, { key: 'advanced', label: '3.0以上 球敘' }] }
 };
 function groupOfType(typeId) {
   const base = String(typeId).replace('_pm', '');
@@ -1597,7 +1597,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* 🆕 細項選擇：新手區＝新手友善場／新手體驗；散打區＝一般散打／2.8-3.3 球敘 */}
+            {/* 🆕 細項選擇：新手區＝新手友善場／新手體驗；散打區＝一般散打／3.0以上 球敘 */}
             <div className={`grid ${isCheckInMode ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'} gap-2 sm:gap-4`}>
               {gridTypes.map(typeId => {
                 const cfg = TYPE_CONFIG[typeId];
@@ -2222,8 +2222,8 @@ export default function Home() {
             <h2 className="text-2xl font-black text-[#ff6d00] px-2">遞補備取：{totalWaitCount} 位</h2>
             <div className="space-y-3">
               {waitList.map((item, index) => (
-                <div key={item.id} className="bg-white p-4 rounded-2xl flex justify-between items-center border border-slate-100">
-                  <span className="text-xl font-bold text-slate-600">
+                <div key={item.id} className="bg-[#f5c451] p-4 rounded-2xl flex justify-between items-center border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }}>
+                  <span className="text-xl sm:text-2xl font-bold text-[#101010]">
                     {item.review_status === 'pending' && <span className="bg-amber-400 text-slate-900 text-xs px-2 py-1 rounded-full font-bold mr-2">⏳審核中</span>}
                     <span className="text-[#ff6d00] mr-2">[備取 {index + 1}]</span>{item.name} ({item.count}位)
                   </span>
