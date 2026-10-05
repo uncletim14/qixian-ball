@@ -1350,7 +1350,7 @@ export default function Home() {
           )}
 
           <h1 className={`text-3xl sm:text-5xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#17587f]'}`}>
-            七賢匹克球敘<span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">團</span>
+            七賢匹克球敘團
           </h1>
 
           <div className={`border-t-2 border-dashed pt-4 mt-4 sm:mt-6 space-y-3 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#e8c23a]'}`}>
