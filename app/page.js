@@ -1381,9 +1381,10 @@ export default function Home() {
                 </p>
 
                 {/* 🔴 網站更新提示 🔴 */}
-                <p className="text-red-600 text-sm sm:text-lg font-black tracking-wider flex items-center justify-center gap-1">
-                  <span>⏰</span> 網站報名每週六晚上 10 點更新
-                </p>
+                <div className="text-red-600 text-sm sm:text-lg font-black tracking-wider text-center space-y-1">
+                  <p className="flex items-center justify-center gap-1"><span>⏰</span> 網站報名每週六晚上 10 點更新下週報名</p>
+                  <p>非會員星期三晚上 10 點後開放報名星期六球敘</p>
+                </div>
               </>
             )}
           </div>
