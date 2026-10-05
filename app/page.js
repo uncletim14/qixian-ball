@@ -988,11 +988,14 @@ export default function Home() {
 
     // 🆕 每週分區密碼：送出前再向伺服器驗證一次（密碼只在資料庫端比對，不會傳到瀏覽器）
     const submitGroup = groupOfType(selectedType);
-    const { data: zonePwOk, error: zonePwError } = await supabase.rpc('check_zone_password', {
-      p_week: weekKey,
-      p_group: submitGroup,
-      p_password: zonePasswords[submitGroup] || ''
-    });
+    const freeAdvancedNow = isAdvancedFree;
+    const { data: zonePwOk, error: zonePwError } = freeAdvancedNow
+      ? { data: true, error: null }
+      : await supabase.rpc('check_zone_password', {
+        p_week: weekKey,
+        p_group: submitGroup,
+        p_password: zonePasswords[submitGroup] || ''
+      });
     if (zonePwError || !zonePwOk) {
       alert('🔒 本週分區密碼驗證失敗，請回到上一頁重新輸入密碼！');
       setZonePasswords(prev => ({ ...prev, [submitGroup]: '' }));
@@ -1281,7 +1284,16 @@ export default function Home() {
 
   // 🆕 導覽相關的衍生狀態與操作
   const showNav = !isCheckInMode && !isSelfCheckIn;
-  const groupUnlocked = !!(selectedGroup && zonePasswords[selectedGroup]);
+  const groupPwPassed = !!(selectedGroup && zonePasswords[selectedGroup]);
+  // 🆕 週三晚上 10 點起，週六整天（早/晚、所有分區與選項）免輸入密碼（仍需 LINE 登入）
+  const isAdvancedFree = (() => {
+    if (selectedDow !== 6 || !weekKey) return false;
+    const [wy, wm, wd] = weekKey.split('/').map(Number);
+    const openAt = new Date(wy, wm - 1, wd - 3, 22, 0, 0); // 週六往前 3 天 = 週三 22:00
+    return new Date() >= openAt;
+  })();
+  const freeBypass = isAdvancedFree && !!selectedGroup;
+  const groupUnlocked = groupPwPassed || freeBypass;
   const lineReady = !!lineSession?.loggedIn;
   const stage = (navStage === 'gate' || navStage === 'register')
     ? (!selectedGroup ? 'home' : (groupUnlocked && lineReady && subKey ? 'register' : 'gate'))
@@ -1516,7 +1528,7 @@ export default function Home() {
           <div className="bg-[#17587f] border-[3px] border-[#101010] rounded-3xl p-5 sm:p-8 space-y-4" style={{ boxShadow: '4px 4px 0 #101010' }}>
             <button onClick={() => setNavStage('group')} className="text-sm font-black text-[#101010] bg-white px-4 py-2 rounded-xl border-2 border-[#101010]">← 返回</button>
             <div className="text-2xl sm:text-3xl font-black text-white">{ZONE_GROUPS[selectedGroup].icon} {ZONE_GROUPS[selectedGroup].label}報名驗證</div>
-            <div className="text-white/90 font-bold text-sm sm:text-base">需要先輸入本週的{ZONE_GROUPS[selectedGroup].label}密碼，再用 LINE 登入才能報名</div>
+            <div className="text-white/90 font-bold text-sm sm:text-base">{freeBypass ? '週六全場本時段免密碼，請用 LINE 登入後報名' : `需要先輸入本週的${ZONE_GROUPS[selectedGroup].label}密碼，再用 LINE 登入才能報名`}</div>
 
             {!groupUnlocked ? (
               <div className="space-y-3">
@@ -1532,7 +1544,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="bg-[#e8c23a] rounded-2xl border-[3px] border-[#101010] p-3 font-black text-[#101010]">✅ 本週密碼已通過</div>
+                <div className="bg-[#e8c23a] rounded-2xl border-[3px] border-[#101010] p-3 font-black text-[#101010]">{freeBypass && !groupPwPassed ? '✅ 本時段週六全場免密碼' : '✅ 本週密碼已通過'}</div>
                 {lineSession === null ? (
                   <div className="text-white font-bold text-center">確認登入狀態中…</div>
                 ) : (
