@@ -1161,6 +1161,9 @@ export default function Home() {
 
   // 管理員一鍵結算當天未報到者
   const handleSettleNoShow = async () => {
+    // 🆕 缺席次數改由新後台（my-portal-sat）依報名紀錄自動統計，不再用這個手動結算按鈕累計
+    alert('📋 未報到次數已改由新後台（/my-portal-sat）自動統計，不需要再手動結算。');
+    return;
     if (!confirm(`確定要結算【${activeDate}】場次的未報到名單嗎？未報到的正取球友將會被記錄缺席 1 次。`)) return;
 
     // 🆕 因雨取消的場次不應該結算未到場（不是球友的錯），依目前管理員選擇檢視的分區判斷早上/晚上場
