@@ -63,34 +63,91 @@ function getSaturdayDateRange(pastCount, futureCount) {
   return result;
 }
 
-// 🆕 六個分區設定（新增「新手體驗(晚上)」，人數上限可在管理員模式調整，這裡只留單筆報名限制與顯示用文字）
+// 🆕 八個分區設定（早上/晚上各四個：新手體驗、新手友善場、一般散打、2.8-3.3 球敘）
 const TYPE_CONFIG = {
   experience: { label: '新手體驗', perSubmitMax: 4 },
-  normal: { label: '新手區', perSubmitMax: 4 },
-  openplay: { label: '一般散打(2.0以上)', perSubmitMax: 4 },
+  normal: { label: '新手友善場', perSubmitMax: 4 },
+  openplay: { label: '一般散打', perSubmitMax: 4 },
+  advanced: { label: '2.8-3.3 球敘', perSubmitMax: 4 },
   experience_pm: { label: '新手體驗(晚上)', perSubmitMax: 4 },
-  normal_pm: { label: '新手區(晚上)', perSubmitMax: 4 },
-  openplay_pm: { label: '散打(晚上)', perSubmitMax: 4 }
+  normal_pm: { label: '新手友善場(晚上)', perSubmitMax: 4 },
+  openplay_pm: { label: '一般散打(晚上)', perSubmitMax: 4 },
+  advanced_pm: { label: '2.8-3.3 球敘(晚上)', perSubmitMax: 4 }
 };
-const TYPE_ORDER = ['experience', 'normal', 'openplay', 'experience_pm', 'normal_pm', 'openplay_pm'];
+const TYPE_ORDER = ['experience', 'normal', 'openplay', 'advanced', 'experience_pm', 'normal_pm', 'openplay_pm', 'advanced_pm'];
 // 🆕 各分區每人收費金額（新手體驗免費，其餘皆 $100/人），供自動帶入報名費收入使用
-const CATEGORY_PRICE = { experience: 0, normal: 100, openplay: 100, experience_pm: 0, normal_pm: 100, openplay_pm: 100 };
-// 🆕 早上/晚上時段各自包含的分區（給報名選單用；後台管理相關功能仍用 TYPE_ORDER 涵蓋全部6個分區）
+const CATEGORY_PRICE = { experience: 0, normal: 100, openplay: 100, advanced: 100, experience_pm: 0, normal_pm: 100, openplay_pm: 100, advanced_pm: 100 };
 const SESSION_TYPES = {
-  AM: ['experience', 'normal', 'openplay'],
-  PM: ['experience_pm', 'normal_pm', 'openplay_pm']
+  AM: ['experience', 'normal', 'openplay', 'advanced'],
+  PM: ['experience_pm', 'normal_pm', 'openplay_pm', 'advanced_pm']
 };
-const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10, experience_pm: 9, normal_pm: 9, openplay_pm: 9 };
+const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10, advanced: 10, experience_pm: 9, normal_pm: 9, openplay_pm: 9, advanced_pm: 10 };
+// 🆕 週一/週四/週五（都是晚上場）的永久預設人數：新手體驗0、新手友善9、一般散打18、2.8-3.3 球敘10
+const WEEKDAY_PM_DEFAULT_CAPACITY = { experience_pm: 0, normal_pm: 9, openplay_pm: 18, advanced_pm: 10 };
+function getDefaultCapacity(dateKey) {
+  const [y, m, d] = String(dateKey).split('/').map(Number);
+  const dow = new Date(y, (m || 1) - 1, d || 1).getDay();
+  return dow === 6 ? DEFAULT_CAPACITY : { ...DEFAULT_CAPACITY, ...WEEKDAY_PM_DEFAULT_CAPACITY };
+}
 
-// 🆕 依分區區分的時段設定：早上三區 9:00-12:00（8:30截止/9:00鎖定），
-//    晚上三區 19:00-21:20（18:30截止/19:00鎖定，跟散打區網站一致）
+// 🆕 首頁導覽：先選星期幾 → 選新手區/散打區（要輸入本週密碼＋LINE 登入）→ 選細項
+const DOW_OPTIONS = [
+  { dow: 1, label: '週一' },
+  { dow: 4, label: '週四' },
+  { dow: 5, label: '週五' },
+  { dow: 6, label: '週六' }
+];
+const DOW_LABEL = { 1: '週一', 4: '週四', 5: '週五', 6: '週六' };
+const ZONE_GROUPS = {
+  newbie: { label: '新手區', icon: '🌱', subs: [{ key: 'normal', label: '新手友善場' }, { key: 'experience', label: '新手體驗' }] },
+  openplay: { label: '散打區', icon: '🔥', subs: [{ key: 'openplay', label: '一般散打' }, { key: 'advanced', label: '2.8-3.3 球敘' }] }
+};
+function groupOfType(typeId) {
+  const base = String(typeId).replace('_pm', '');
+  return (base === 'normal' || base === 'experience') ? 'newbie' : 'openplay';
+}
+
+// 🆕 週一/四/五的場次日期：用跟週六一樣的「每週六 22:00 換週」規則（週日起算下一週）
+function getCycleDateStr(dow) {
+  const now = new Date();
+  const day = now.getDay();
+  const hour = now.getHours();
+  const isNext = (day === 6 && hour >= 22) || day === 0;
+  const diffToMon = day === 0 ? 6 : day - 1;
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(now.getDate() - diffToMon + (isNext ? 7 : 0) + (dow - 1));
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// 🆕 管理員用：過去 pastCount 週 + 未來 futureCount 週，每週含 週一/週四/週五/週六 四個場次日期
+function getEventDateRange(pastCount, futureCount) {
+  const result = [];
+  getSaturdayDateRange(pastCount, futureCount).forEach(satStr => {
+    const [y, m, d] = satStr.split('/').map(Number);
+    [-5, -2, -1, 0].forEach(offset => {
+      const dt = new Date(y, m - 1, d + offset);
+      result.push(`${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getDate()).padStart(2, '0')}`);
+    });
+  });
+  return result;
+}
+function weekdayLabelOf(dateStr) {
+  const [y, m, d] = String(dateStr).split('/').map(Number);
+  return ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][new Date(y, m - 1, d).getDay()];
+}
+
+// 🆕 依分區區分的時段設定：早上四區 9:00-12:00（8:30截止/9:00鎖定），
+//    晚上四區 19:00-21:20（18:30截止/19:00鎖定）
 const SESSION_TIMING = {
   experience: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
   normal: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
   openplay: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
+  advanced: { cutoff: 830, lock: 900, boardTime: '9:00 - 12:00', checkinStart: 830, checkinEnd: 1200 },
   experience_pm: { cutoff: 1830, lock: 1900, boardTime: '19:00 - 21:20', checkinStart: 1830, checkinEnd: 2100 },
   normal_pm: { cutoff: 1830, lock: 1900, boardTime: '19:00 - 21:20', checkinStart: 1830, checkinEnd: 2100 },
-  openplay_pm: { cutoff: 1830, lock: 1900, boardTime: '19:00 - 21:20', checkinStart: 1830, checkinEnd: 2100 }
+  openplay_pm: { cutoff: 1830, lock: 1900, boardTime: '19:00 - 21:20', checkinStart: 1830, checkinEnd: 2100 },
+  advanced_pm: { cutoff: 1830, lock: 1900, boardTime: '19:00 - 21:20', checkinStart: 1830, checkinEnd: 2100 }
 };
 
 // 🆕 把 830 這種數字格式轉成 "8:30" 方便顯示
@@ -101,11 +158,52 @@ function formatTimeVal(v) {
 }
 
 export default function Home() {
-  const activeDate = getTargetSaturdayDateStr();
+  // 🆕 週一/四/五/六都可以選：selectedDow 決定目前操作的是星期幾，activeDate 跟著算出該日的場次日期
+  const [selectedDow, setSelectedDow] = useState(6);
+  const weekKey = getTargetSaturdayDateStr(); // 每週密碼用「該週的星期六日期」當代號，週一~週六同一週共用
+  const activeDate = selectedDow === 6 ? weekKey : getCycleDateStr(selectedDow);
 
   const [selectedType, setSelectedType] = useState('normal');
   // 🆕 早上/晚上時段選擇：先選時段，才會顯示該時段的三個分區
   const [selectedSession, setSelectedSession] = useState('AM');
+
+  // 🆕 首頁導覽狀態：home(選星期幾) → group(選新手區/散打區) → gate(輸入密碼+LINE登入) → register(報名)
+  const [navStage, setNavStage] = useState('home');
+  const [selectedGroup, setSelectedGroup] = useState(null); // 'newbie' | 'openplay'
+  const [subKey, setSubKey] = useState(null); // 'normal' | 'experience' | 'openplay' | 'advanced'
+  const [zonePasswords, setZonePasswords] = useState({}); // 已通過驗證的本週密碼 { newbie: '...', openplay: '...' }
+  const [gatePwInput, setGatePwInput] = useState('');
+  const [navRestored, setNavRestored] = useState(false);
+
+  // 🆕 LINE 登入會整頁跳轉再回來，所以把導覽進度存在瀏覽器的 sessionStorage（只存在這個分頁），回來後自動還原
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('navState');
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved.weekKey === getTargetSaturdayDateStr()) {
+          if (saved.dow) setSelectedDow(saved.dow);
+          if (saved.session) setSelectedSession(saved.session);
+          if (saved.group) setSelectedGroup(saved.group);
+          if (saved.sub) setSubKey(saved.sub);
+          if (saved.pw) setZonePasswords(saved.pw);
+          if (saved.stage) setNavStage(saved.stage);
+        }
+      }
+    } catch (e) {}
+    setNavRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!navRestored) return;
+    try {
+      sessionStorage.setItem('navState', JSON.stringify({ weekKey, dow: selectedDow, session: selectedSession, group: selectedGroup, sub: subKey, pw: zonePasswords, stage: navStage }));
+    } catch (e) {}
+  }, [navRestored, weekKey, selectedDow, selectedSession, selectedGroup, subKey, zonePasswords, navStage]);
+
+  // 🆕 週一/四/五只有晚上場，自動鎖定晚上時段
+  useEffect(() => {
+    if (selectedDow !== 6) setSelectedSession('PM');
+  }, [selectedDow]);
   const [list, setList] = useState([]);
   const [isCheckInMode, setIsCheckInMode] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -146,7 +244,8 @@ export default function Home() {
   //    不用每週手動設定開放時間；earlyOpenForDate 只用於「這一週想提前解鎖」的例外情況。
   const [membersPassword, setMembersPassword] = useState(''); // 使用者在表單輸入的密碼
   const [earlyOpenForDate, setEarlyOpenForDate] = useState(null); // 若等於 activeDate，代表幹部手動提前解鎖了本週
-  const isMembersOnlyActive = earlyOpenForDate === activeDate ? false : new Date() < getWednesdayCutoffForSaturday(activeDate);
+  // 🆕 改版後改用「每週新手區/散打區密碼」取代舊的「週三 22:00 前會員限定」機制，所以這裡固定為 false（程式保留，之後想恢復可改回）
+  const isMembersOnlyActive = false;
 
   // 🆕 管理員面板用：(可選)更新密碼
   const [membersOnlyPasswordInput, setMembersOnlyPasswordInput] = useState('');
@@ -162,7 +261,7 @@ export default function Home() {
   //    跟上面「即時生效」的 capacitySettings 分開，避免瀏覽其他週時誤動到目前開放中的場次
   const [settingsDateKey, setSettingsDateKey] = useState(activeDate);
   const [capacityInputs, setCapacityInputs] = useState(DEFAULT_CAPACITY);
-  const upcomingSaturdaysForSettings = getSaturdayDateRange(2, 5);
+  const upcomingSaturdaysForSettings = getEventDateRange(2, 5);
 
   // 🆕 現場收支記帳（跟人數設定共用 settingsDateKey 這個日期選單）
   const [financialRecords, setFinancialRecords] = useState([]);
@@ -186,7 +285,7 @@ export default function Home() {
   const [blacklistEntries, setBlacklistEntries] = useState([]);
 
   // 🆕 管理員模式：全區名單（同時顯示三個分區的名單，不用切換分頁）
-  const [zoneLists, setZoneLists] = useState({ experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] });
+  const [zoneLists, setZoneLists] = useState({ experience: [], normal: [], openplay: [], advanced: [], experience_pm: [], normal_pm: [], openplay_pm: [], advanced_pm: [] });
   // 🆕 全區名單管理的分頁篩選（ALL / experience / normal / openplay）
   const [adminCategoryFilter, setAdminCategoryFilter] = useState('ALL');
 
@@ -196,6 +295,9 @@ export default function Home() {
       const params = new URLSearchParams(window.location.search);
       if (params.get('mode') === 'checkin') {
         setIsSelfCheckIn(true);
+        // 🆕 現場掃碼報到：自動切到「今天」的場次（週一/四/五/六），其他日子預設週六
+        const todayDow = new Date().getDay();
+        if ([1, 4, 5, 6].includes(todayDow)) setSelectedDow(todayDow);
       }
     }
   }, []);
@@ -279,8 +381,12 @@ export default function Home() {
 
   // 🆕 切換早上/晚上時段時，自動切換到該時段的預設分區（新手區）
   useEffect(() => {
-    setSelectedType(selectedSession === 'AM' ? 'normal' : 'normal_pm');
-  }, [selectedSession]);
+    if (isCheckInMode || isSelfCheckIn || !subKey) {
+      setSelectedType(selectedSession === 'AM' ? 'normal' : 'normal_pm');
+      return;
+    }
+    setSelectedType(subKey + (selectedSession === 'PM' ? '_pm' : ''));
+  }, [selectedSession, subKey, isCheckInMode, isSelfCheckIn]);
 
   useEffect(() => {
     setCheckInName('');
@@ -365,13 +471,16 @@ export default function Home() {
   // 🆕 共用的查詢邏輯
   const fetchCapacityForDate = async (dateKey) => {
     const { data } = await supabase.from('event_settings').select('*').eq('date_key', dateKey).maybeSingle();
+    const defaults = getDefaultCapacity(dateKey);
     return {
-      experience: data?.experience_max ?? DEFAULT_CAPACITY.experience,
-      normal: data?.normal_max ?? DEFAULT_CAPACITY.normal,
-      openplay: data?.openplay_max ?? DEFAULT_CAPACITY.openplay,
-      experience_pm: data?.experience_pm_max ?? DEFAULT_CAPACITY.experience_pm,
-      normal_pm: data?.normal_pm_max ?? DEFAULT_CAPACITY.normal_pm,
-      openplay_pm: data?.openplay_pm_max ?? DEFAULT_CAPACITY.openplay_pm
+      experience: data?.experience_max ?? defaults.experience,
+      normal: data?.normal_max ?? defaults.normal,
+      openplay: data?.openplay_max ?? defaults.openplay,
+      advanced: data?.advanced_max ?? defaults.advanced,
+      experience_pm: data?.experience_pm_max ?? defaults.experience_pm,
+      normal_pm: data?.normal_pm_max ?? defaults.normal_pm,
+      openplay_pm: data?.openplay_pm_max ?? defaults.openplay_pm,
+      advanced_pm: data?.advanced_pm_max ?? defaults.advanced_pm
     };
   };
 
@@ -383,9 +492,11 @@ export default function Home() {
       experience_max: parseInt(capacityInputs.experience) || 0,
       normal_max: parseInt(capacityInputs.normal) || 0,
       openplay_max: parseInt(capacityInputs.openplay) || 0,
+      advanced_max: parseInt(capacityInputs.advanced) || 0,
       experience_pm_max: parseInt(capacityInputs.experience_pm) || 0,
       normal_pm_max: parseInt(capacityInputs.normal_pm) || 0,
-      openplay_pm_max: parseInt(capacityInputs.openplay_pm) || 0
+      openplay_pm_max: parseInt(capacityInputs.openplay_pm) || 0,
+      advanced_pm_max: parseInt(capacityInputs.advanced_pm) || 0
     }, { onConflict: 'date_key' });
 
     if (error) {
@@ -455,7 +566,7 @@ export default function Home() {
       .select('id, name, count, session_id, arrived, review_status, line_user_id')
       .in('session_id', sessionIds);
 
-    const grouped = { experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] };
+    const grouped = { experience: [], normal: [], openplay: [], advanced: [], experience_pm: [], normal_pm: [], openplay_pm: [], advanced_pm: [] };
     (data || []).forEach(item => {
       const typeId = item.session_id.replace(`${dateKey}_`, '');
       if (grouped[typeId]) grouped[typeId].push(item);
@@ -526,7 +637,7 @@ export default function Home() {
         .select('id, name, count, session_id, arrived, review_status, line_user_id')
         .in('session_id', sessionIds);
 
-      const grouped = { experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] };
+      const grouped = { experience: [], normal: [], openplay: [], advanced: [], experience_pm: [], normal_pm: [], openplay_pm: [], advanced_pm: [] };
       (dayRegs || []).forEach(item => {
         const typeId = item.session_id.replace(`${dateKey}_`, '');
         if (grouped[typeId]) grouped[typeId].push(item);
@@ -711,7 +822,7 @@ export default function Home() {
       .in('session_id', sessionIds)
       .order('created_at', { ascending: true });
 
-    const grouped = { experience: [], normal: [], openplay: [], experience_pm: [], normal_pm: [], openplay_pm: [] };
+    const grouped = { experience: [], normal: [], openplay: [], advanced: [], experience_pm: [], normal_pm: [], openplay_pm: [], advanced_pm: [] };
     (data || []).forEach(item => {
       const typeId = item.session_id.replace(`${dateKey}_`, '');
       if (grouped[typeId]) grouped[typeId].push(item);
@@ -849,6 +960,25 @@ export default function Home() {
 
     if (isCurrentTypeClosed) {
       alert(`⚠️ 本場次【${currentTypeConfig.label}】暫未開放報名！`);
+      return;
+    }
+
+    // 🆕 已經過去的場次（例如週四時看到本週一）不能再報名
+    if (isPastEvent) {
+      alert('🚫 本場次已結束，無法報名！');
+      return;
+    }
+
+    // 🆕 每週分區密碼：送出前再向伺服器驗證一次（密碼只在資料庫端比對，不會傳到瀏覽器）
+    const submitGroup = groupOfType(selectedType);
+    const { data: zonePwOk, error: zonePwError } = await supabase.rpc('check_zone_password', {
+      p_week: weekKey,
+      p_group: submitGroup,
+      p_password: zonePasswords[submitGroup] || ''
+    });
+    if (zonePwError || !zonePwOk) {
+      alert('🔒 本週分區密碼驗證失敗，請回到上一頁重新輸入密碼！');
+      setZonePasswords(prev => ({ ...prev, [submitGroup]: '' }));
       return;
     }
 
@@ -1102,6 +1232,43 @@ export default function Home() {
     fetchAllZoneLists(activeDate);
   };
 
+  // 🆕 導覽相關的衍生狀態與操作
+  const showNav = !isCheckInMode && !isSelfCheckIn;
+  const groupUnlocked = !!(selectedGroup && zonePasswords[selectedGroup]);
+  const lineReady = !!lineSession?.loggedIn;
+  const stage = (navStage === 'gate' || navStage === 'register')
+    ? (!selectedGroup ? 'home' : (groupUnlocked && lineReady && subKey ? 'register' : 'gate'))
+    : navStage;
+  const nowForNav = new Date();
+  const todayStrNow = `${nowForNav.getFullYear()}/${String(nowForNav.getMonth() + 1).padStart(2, '0')}/${String(nowForNav.getDate()).padStart(2, '0')}`;
+  const isPastEvent = activeDate < todayStrNow;
+  const gridTypes = isCheckInMode
+    ? TYPE_ORDER
+    : ((ZONE_GROUPS[selectedGroup]?.subs || []).map(sb => sb.key + (selectedSession === 'PM' ? '_pm' : '')));
+
+  const handleSelectDay = (dow) => {
+    setSelectedDow(dow);
+    setSelectedGroup(null);
+    setSubKey(null);
+    if (dow !== 6) setSelectedSession('PM');
+    setNavStage('group');
+  };
+  const handleSelectGroup = (g) => {
+    setSelectedGroup(g);
+    setSubKey(ZONE_GROUPS[g].subs[0].key);
+    setGatePwInput('');
+    setNavStage('gate');
+  };
+  const handleUnlockGroup = async () => {
+    const pw = gatePwInput.trim();
+    if (!pw) { alert('請輸入本週密碼！'); return; }
+    const { data, error } = await supabase.rpc('check_zone_password', { p_week: weekKey, p_group: selectedGroup, p_password: pw });
+    if (error) { alert('系統錯誤：' + error.message); return; }
+    if (!data) { alert('🔒 密碼錯誤，或本週密碼尚未設定，請洽幹部！'); return; }
+    setZonePasswords(prev => ({ ...prev, [selectedGroup]: pw }));
+    setGatePwInput('');
+  };
+
   const currentUrl = typeof window !== 'undefined' ? `${window.location.origin}?mode=checkin` : '';
   const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(currentUrl)}`;
 
@@ -1122,7 +1289,7 @@ export default function Home() {
           )}
 
           <h1 className={`text-3xl sm:text-5xl font-black tracking-wider leading-tight select-none drop-shadow-sm ${isSelfCheckIn ? 'text-[#0ca678]' : isCheckInMode ? 'text-[#d94800]' : 'text-[#17587f]'}`}>
-            七賢匹克周末球敘<span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">團</span>
+            七賢匹克球敘<span onClick={handleSecretClick} className="cursor-pointer active:opacity-80">團</span>
           </h1>
 
           <div className={`border-t-2 border-dashed pt-4 mt-4 sm:mt-6 space-y-3 ${isSelfCheckIn ? 'border-[#63e6be]' : isCheckInMode ? 'border-[#ffd8a8]' : 'border-[#e8c23a]'}`}>
@@ -1151,7 +1318,7 @@ export default function Home() {
 
                 {/* 🆕 本場次日期（時間已在下方時段區塊顯示，這裡不重複） */}
                 <p className="text-[#17587f] text-lg sm:text-2xl font-black tracking-wide pt-1">
-                  📅 本場次：週六 {activeDate}
+                  {showNav && stage === 'home' ? '📅 請選擇場次日期' : `📅 本場次：${DOW_LABEL[selectedDow]} ${activeDate}`}
                 </p>
 
                 {/* 🔴 網站更新提示 🔴 */}
@@ -1177,6 +1344,105 @@ export default function Home() {
           )}
         </div>
 
+        {/* 🆕 首頁導覽：選日期 → 選新手區/散打區 → 密碼 + LINE 登入 */}
+        {showNav && stage === 'home' && (
+          <div className="space-y-4">
+            <div className="text-center text-xl sm:text-2xl font-black text-[#17587f]">請選擇要報名的日子</div>
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              {DOW_OPTIONS.map(o => {
+                const dateStr = o.dow === 6 ? weekKey : getCycleDateStr(o.dow);
+                const ended = dateStr < todayStrNow;
+                return (
+                  <button
+                    key={o.dow}
+                    onClick={() => handleSelectDay(o.dow)}
+                    className={`p-5 sm:p-7 rounded-3xl border-[3px] border-[#101010] flex flex-col items-center gap-1 transition-all ${ended ? 'bg-slate-100 text-slate-400' : 'bg-white text-[#101010] hover:bg-[#fdf3d4]'}`}
+                    style={{ boxShadow: '4px 4px 0 #101010' }}
+                  >
+                    <span className="text-3xl sm:text-4xl font-black">{o.label}</span>
+                    <span className="text-base sm:text-xl font-black text-[#17587f]">{dateStr.slice(5)}{ended ? '（已結束）' : ''}</span>
+                    <span className="text-xs sm:text-sm font-bold">{o.dow === 6 ? '早上 9:00-12:00 / 晚上 19:00-21:20' : '19:00-21:20'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {showNav && stage === 'group' && (
+          <div className="space-y-4">
+            <button onClick={() => setNavStage('home')} className="text-sm sm:text-base font-black text-[#17587f] bg-white px-4 py-2 rounded-xl border-2 border-[#101010]">← 返回選日期</button>
+            {selectedDow === 6 && (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setSelectedSession('AM')}
+                  className={`p-4 rounded-2xl font-black text-lg sm:text-2xl border-[3px] border-[#101010] ${selectedSession === 'AM' ? 'bg-[#17587f] text-white' : 'bg-white text-[#101010]'}`}
+                  style={{ boxShadow: '3px 3px 0 #101010' }}
+                >
+                  🌅 早上場 (9:00-12:00)
+                </button>
+                <button
+                  onClick={() => setSelectedSession('PM')}
+                  className={`p-4 rounded-2xl font-black text-lg sm:text-2xl border-[3px] border-[#101010] ${selectedSession === 'PM' ? 'bg-[#17587f] text-white' : 'bg-white text-[#101010]'}`}
+                  style={{ boxShadow: '3px 3px 0 #101010' }}
+                >
+                  🌙 晚上場 (19:00-21:20)
+                </button>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              {Object.keys(ZONE_GROUPS).map(g => (
+                <button
+                  key={g}
+                  onClick={() => handleSelectGroup(g)}
+                  className="p-6 sm:p-8 rounded-3xl border-[3px] border-[#101010] bg-[#e8c23a] text-[#101010] flex flex-col items-center gap-2"
+                  style={{ boxShadow: '4px 4px 0 #101010' }}
+                >
+                  <span className="text-4xl">{ZONE_GROUPS[g].icon}</span>
+                  <span className="text-2xl sm:text-3xl font-black">{ZONE_GROUPS[g].label}</span>
+                  <span className="text-xs sm:text-sm font-bold">{ZONE_GROUPS[g].subs.map(sb => sb.label).join(' / ')}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showNav && stage === 'gate' && selectedGroup && (
+          <div className="bg-[#17587f] border-[3px] border-[#101010] rounded-3xl p-5 sm:p-8 space-y-4" style={{ boxShadow: '4px 4px 0 #101010' }}>
+            <button onClick={() => setNavStage('group')} className="text-sm font-black text-[#101010] bg-white px-4 py-2 rounded-xl border-2 border-[#101010]">← 返回</button>
+            <div className="text-2xl sm:text-3xl font-black text-white">{ZONE_GROUPS[selectedGroup].icon} {ZONE_GROUPS[selectedGroup].label}報名驗證</div>
+            <div className="text-white/90 font-bold text-sm sm:text-base">需要先輸入本週的{ZONE_GROUPS[selectedGroup].label}密碼，再用 LINE 登入才能報名</div>
+
+            {!groupUnlocked ? (
+              <div className="space-y-3">
+                <input
+                  type="password"
+                  className="w-full p-4 bg-white rounded-2xl border-[3px] border-[#101010] text-xl text-center tracking-widest focus:outline-none"
+                  placeholder="請輸入本週密碼"
+                  value={gatePwInput}
+                  onChange={e => setGatePwInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleUnlockGroup(); }}
+                />
+                <button className="w-full bg-[#e8c23a] text-[#101010] p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }} onClick={handleUnlockGroup}>確認密碼</button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="bg-[#e8c23a] rounded-2xl border-[3px] border-[#101010] p-3 font-black text-[#101010]">✅ 本週密碼已通過</div>
+                {lineSession === null ? (
+                  <div className="text-white font-bold text-center">確認登入狀態中…</div>
+                ) : (
+                  <a href="/api/line-login" className="block text-center w-full bg-[#06C755] hover:bg-[#05b34c] text-white p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }}>
+                    使用 LINE 登入
+                  </a>
+                )}
+                <p className="text-white/80 font-bold text-xs text-center">🔐 LINE 僅用於登入驗證身份（防止換名字逃避停權），不會取得您的電話、Email 等敏感資料</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(!showNav || stage === 'register') && (
+        <>
         {/* 球友掃碼自助報到區 */}
         {isSelfCheckIn ? (
           <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-6 rounded-3xl shadow-lg text-center space-y-4">
@@ -1216,38 +1482,29 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* 🆕 先選早上／晚上時段入口 */}
+            {/* 🆕 導覽列：目前選到的日期/分區，可返回上一層 */}
             {!isCheckInMode && (
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setSelectedSession('AM')}
-                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-[3px] flex items-center justify-center gap-2 ${selectedSession === 'AM' ? 'bg-[#17587f] text-white border-[#101010]' : 'bg-white text-[#101010] border-[#101010]'}`}
-                  style={{ boxShadow: '3px 3px 0 #101010' }}
-                >
-                  🌅 早上場 (9:00-12:00)
-                </button>
-                <button
-                  onClick={() => setSelectedSession('PM')}
-                  className={`p-4 sm:p-5 rounded-2xl font-black text-lg sm:text-2xl transition-all border-[3px] flex items-center justify-center gap-2 ${selectedSession === 'PM' ? 'bg-[#17587f] text-white border-[#101010]' : 'bg-white text-[#101010] border-[#101010]'}`}
-                  style={{ boxShadow: '3px 3px 0 #101010' }}
-                >
-                  🌙 晚上場 (19:00-21:20)
-                </button>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <button onClick={() => setNavStage('group')} className="text-sm font-black text-[#17587f] bg-white px-4 py-2 rounded-xl border-2 border-[#101010]">← 返回選分區</button>
+                <span className="font-black text-[#17587f] text-base sm:text-xl">
+                  {DOW_LABEL[selectedDow]} · {ZONE_GROUPS[selectedGroup]?.label}{selectedDow === 6 ? (selectedSession === 'AM' ? '（早上場）' : '（晚上場）') : ''}
+                </span>
               </div>
             )}
 
-            {/* 🆕 組別選擇：該時段的三個分區（新手體驗／新手區／散打） */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
-              {(isCheckInMode ? TYPE_ORDER : SESSION_TYPES[selectedSession]).map(typeId => {
+            {/* 🆕 細項選擇：新手區＝新手友善場／新手體驗；散打區＝一般散打／2.8-3.3 球敘 */}
+            <div className={`grid ${isCheckInMode ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'} gap-2 sm:gap-4`}>
+              {gridTypes.map(typeId => {
                 const cfg = TYPE_CONFIG[typeId];
+                const btnLabel = isCheckInMode ? cfg.label : cfg.label.replace('(晚上)', '');
                 return (
                   <button
                     key={typeId}
-                    onClick={() => setSelectedType(typeId)}
+                    onClick={() => { if (isCheckInMode) setSelectedType(typeId); else setSubKey(typeId.replace('_pm', '')); }}
                     className={`p-3 sm:p-5 rounded-2xl font-black transition-all duration-200 border-[3px] flex flex-col items-center justify-center gap-1 ${selectedType === typeId ? 'bg-[#e8c23a] text-[#101010] border-[#101010]' : 'bg-white text-[#101010] border-[#101010]'}`}
                     style={{ boxShadow: '2px 2px 0 #101010' }}
                   >
-                    <span className="text-base sm:text-2xl text-center leading-tight">{cfg.label}</span>
+                    <span className="text-base sm:text-2xl text-center leading-tight">{btnLabel}</span>
                     {!isCheckInMode && (
                       <span className={`text-xs sm:text-lg font-bold text-center ${capacitySettings[typeId] === 0 ? 'text-red-500' : 'text-[#17587f]'}`}>
                         {capacitySettings[typeId] === 0 ? '❌ 本區未開放' : `(開放報名(限${capacitySettings[typeId]}位))`}
@@ -1297,6 +1554,21 @@ export default function Home() {
                       <button onClick={handleAdminLogout} className="text-xs font-bold text-slate-400 hover:text-slate-600 underline">登出</button>
                     </div>
 
+                    {/* 🆕 操作日：因雨取消、結算未報到等「依目前日期」的功能，要先選是週幾 */}
+                    <div className="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-slate-500">🗓️ 操作日（因雨取消／結算用）：</span>
+                      {DOW_OPTIONS.map(o => (
+                        <button
+                          key={o.dow}
+                          onClick={() => setSelectedDow(o.dow)}
+                          className={`px-3 py-1.5 rounded-xl font-black text-sm border-2 ${selectedDow === o.dow ? 'bg-[#17587f] text-white border-[#17587f]' : 'bg-white text-slate-600 border-slate-300'}`}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                      <span className="text-xs font-bold text-slate-400">{activeDate}</span>
+                    </div>
+
                     {/* 🆕 選擇單日場次：統一控制人數設定/記帳/全區名單管理，可以往前選過去的場次做簽到修正 */}
                     <div className="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center gap-2">
                       <span className="text-sm font-bold text-slate-500">📅 選擇單日場次：</span>
@@ -1314,7 +1586,7 @@ export default function Home() {
                       >
                         {upcomingSaturdaysForSettings.map(dateStr => (
                           <option key={dateStr} value={dateStr}>
-                            {dateStr}（週六）{dateStr === activeDate ? ' - 目前開放中' : ''}
+                            {dateStr}（{weekdayLabelOf(dateStr)}）{dateStr === activeDate ? ' - 目前開放中' : ''}
                           </option>
                         ))}
                       </select>
@@ -1381,7 +1653,7 @@ export default function Home() {
                     {/* 🆕 人數上限設定（日期由上方「選擇單日場次」統一控制） */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-black text-slate-600">⚙️ 設定【{settingsDateKey}】六個分區人數上限</div>
+                        <div className="text-sm font-black text-slate-600">⚙️ 設定【{settingsDateKey}（{weekdayLabelOf(settingsDateKey)}）】各分區人數上限</div>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {TYPE_ORDER.map(typeId => (
@@ -1534,7 +1806,7 @@ export default function Home() {
                     {/* 🆕 全區名單管理：跟主後台一樣的分頁籤 + 攤平列表風格 */}
                     <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-4">
                       {(() => {
-                        const typeIcons = { experience: '🏸', normal: '🌱', openplay: '🔥', experience_pm: '🌟', normal_pm: '🌛', openplay_pm: '🌙' };
+                        const typeIcons = { experience: '🏸', normal: '🌱', openplay: '🔥', advanced: '🎯', experience_pm: '🌟', normal_pm: '🌛', openplay_pm: '🌙', advanced_pm: '🎯' };
 
                         // 依三個分區各自的人數上限計算正取/備取，並攤平成單一陣列
                         const categoryConfirmedCounts = {};
@@ -1556,7 +1828,7 @@ export default function Home() {
                           <>
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                               <div className="flex items-center gap-2">
-                                <div className="text-lg font-black text-slate-800">全區名單管理（{settingsDateKey}(週六)）</div>
+                                <div className="text-lg font-black text-slate-800">全區名單管理（{settingsDateKey}({weekdayLabelOf(settingsDateKey)})）</div>
                                 <button
                                   onClick={() => fetchAllZoneLists()}
                                   className="text-xs font-bold text-sky-600 hover:text-sky-800 underline shrink-0"
@@ -1700,7 +1972,12 @@ export default function Home() {
                   </div>
                 )
               ) : (
-                isCancelled ? (
+                isPastEvent ? (
+                  <div className="text-center py-6 space-y-2">
+                    <p className="text-2xl font-black text-white">🚫 本場次已結束</p>
+                    <p className="text-sm font-bold text-white/80">請返回選擇其他日期</p>
+                  </div>
+                ) : isCancelled ? (
                   <div className="text-center py-6 space-y-2">
                     <p className="text-2xl font-black text-red-600">⛈️ 本場次因雨取消或其他原因取消</p>
                     <p className="text-sm font-bold text-slate-500">{currentSessionKey === 'AM' ? '早上場' : '晚上場'}已取消，暫停報名，請留意後續開放通知</p>
@@ -1849,6 +2126,9 @@ export default function Home() {
               ))}
             </div>
           </div>
+        )}
+
+        </>
         )}
 
       </div>
