@@ -503,6 +503,23 @@ export default function Home() {
     };
   };
 
+  // 🆕 首頁：某天所有分區人數上限都是 0 → 顯示「未開放」
+  const [dayClosed, setDayClosed] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = {};
+      for (const o of DOW_OPTIONS) {
+        const dStr = o.dow === 6 ? weekKey : getCycleDateStr(o.dow);
+        const caps = await fetchCapacityForDate(dStr);
+        const types = o.dow === 6 ? TYPE_ORDER : TYPE_ORDER.filter(t => t.endsWith('_pm'));
+        result[o.dow] = types.every(t => Number(caps[t]) === 0);
+      }
+      if (!cancelled) setDayClosed(result);
+    })();
+    return () => { cancelled = true; };
+  }, [weekKey, navStage]);
+
   // 🆕 儲存人數上限設定（管理員用）：儲存到「設定面板目前選擇瀏覽」的那個星期六，
   //    如果剛好就是目前正在開放報名的那一週，同步更新即時生效的 capacitySettings
   const handleSaveCapacitySettings = async () => {
@@ -1435,15 +1452,17 @@ export default function Home() {
               {DOW_OPTIONS.map(o => {
                 const dateStr = o.dow === 6 ? weekKey : getCycleDateStr(o.dow);
                 const ended = dateStr < todayStrNow;
+                const closed = !!dayClosed[o.dow] && !ended;
                 return (
                   <button
                     key={o.dow}
-                    onClick={() => handleSelectDay(o.dow)}
-                    className={`py-3 px-2 sm:py-4 rounded-3xl border-[3px] border-[#101010] flex flex-col items-center justify-center leading-tight transition-all ${ended ? 'bg-slate-100 text-slate-400' : 'bg-white text-[#101010] hover:bg-[#fdf3d4]'}`}
+                    onClick={() => { if (!closed) handleSelectDay(o.dow); }}
+                    disabled={closed}
+                    className={`py-3 px-2 sm:py-4 rounded-3xl border-[3px] border-[#101010] flex flex-col items-center justify-center leading-tight transition-all ${ended || closed ? 'bg-slate-100 text-slate-400' : 'bg-white text-[#101010] hover:bg-[#fdf3d4]'}`}
                     style={{ boxShadow: '4px 4px 0 #101010' }}
                   >
                     <span className="text-3xl sm:text-5xl font-black">{o.label}</span>
-                    <span className="text-3xl sm:text-5xl font-black text-[#17587f] mt-1">{dateStr.slice(5)}{ended ? <span className="text-base sm:text-xl">（已結束）</span> : ''}</span>
+                    <span className="text-3xl sm:text-5xl font-black text-[#17587f] mt-1">{dateStr.slice(5)}{ended ? <span className="text-base sm:text-xl">（已結束）</span> : closed ? <span className="text-base sm:text-xl">（未開放）</span> : ''}</span>
                     {o.dow === 6 ? (
                       <span className="text-lg sm:text-2xl font-black mt-1 flex flex-col items-center">
                         <span>早上 9:00-12:00</span>
