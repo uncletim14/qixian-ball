@@ -152,6 +152,7 @@ export default function SatAdminPortal() {
   const [expandedAbsenceCategory, setExpandedAbsenceCategory] = useState(null);
   const [blacklists, setBlacklists] = useState([]);
   const [blockNameInput, setBlockNameInput] = useState('');
+  const [lineNames, setLineNames] = useState({}); // line_user_id → LINE 真實顯示名稱
 
   // ───────── 月報表 / QR ─────────
   const [selectedMonth, setSelectedMonth] = useState('');
@@ -474,6 +475,13 @@ export default function SatAdminPortal() {
   const fetchBlacklists = async () => {
     const { data } = await supabase.from('pickleball_blacklists').select('*').not('blocked_until', 'is', null).order('blocked_until', { ascending: false });
     setBlacklists(data || []);
+    const ids = [...new Set((data || []).map(b => b.line_user_id).filter(Boolean))];
+    if (ids.length > 0) {
+      const { data: users } = await supabase.from('line_users').select('line_user_id, display_name').in('line_user_id', ids);
+      const map = {};
+      (users || []).forEach(u => { map[u.line_user_id] = u.display_name; });
+      setLineNames(map);
+    }
   };
   const blockUntilStr = () => {
     const t = new Date();
@@ -1239,7 +1247,7 @@ export default function SatAdminPortal() {
                   return (
                     <div key={b.id} className={`p-3 rounded-xl border flex justify-between items-center ${isExpired ? 'bg-slate-50/50 border-slate-200 opacity-60' : 'bg-slate-50 border-rose-200'}`}>
                       <div>
-                        <span className="font-black text-slate-800 mr-2">{b.name}</span>
+                        <span className="font-black text-slate-800 mr-2">{b.name}{b.line_user_id && lineNames[b.line_user_id] ? <span className="text-slate-500 font-bold">（{lineNames[b.line_user_id]}）</span> : null}</span>
                         <span className={`text-xs font-bold ${isExpired ? 'text-slate-400' : 'text-rose-600'}`}>
                           {isExpired ? `已到期（原停權至 ${b.blocked_until}，球友已可報名）` : `停權至 ${b.blocked_until}`}
                         </span>
