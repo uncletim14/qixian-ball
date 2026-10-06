@@ -1005,122 +1005,52 @@ export default function Home() {
       return;
     }
 
-    // 🆕 每週分區密碼：送出前再向伺服器驗證一次（密碼只在資料庫端比對，不會傳到瀏覽器）
+    // 🆕 報名的所有檢查（LINE 登入、每週密碼、停權、截止時間、人數上限、重複報名、首次審核）
+    //    都改由伺服器執行，瀏覽器不再直接寫入資料庫
+    if (!lineSession?.loggedIn) {
+      alert('🔒 請先使用 LINE 登入才能報名！');
+      return;
+    }
     const submitGroup = groupOfType(selectedType);
-    const freeAdvancedNow = isAdvancedFree;
-    const { data: zonePwOk, error: zonePwError } = freeAdvancedNow
-      ? { data: true, error: null }
-      : await supabase.rpc('check_zone_password', {
-        p_week: weekKey,
-        p_group: submitGroup,
-        p_password: zonePasswords[submitGroup] || ''
-      });
-    if (zonePwError || !zonePwOk) {
-      alert('🔒 本週分區密碼驗證失敗，請回到上一頁重新輸入密碼！');
-      setZonePasswords(prev => ({ ...prev, [submitGroup]: '' }));
-      return;
-    }
-
-    // 🆕 會員限定模式檢查：開放時間之前，必須輸入正確的會員密碼才能報名
-    //    密碼驗證用資料庫查詢條件比對（伺服器端比對），密碼本身不會被抓到前端
-    if (isMembersOnlyActive) {
-      if (!membersPassword.trim()) {
-        alert('🔒 目前為會員限定報名期間，請輸入會員密碼！');
-        return;
-      }
-
-      const { data: matched, error: pwdError } = await supabase
-        .from('site_settings')
-        .select('id')
-        .eq('id', 1)
-        .eq('members_only_password', membersPassword.trim())
-        .maybeSingle();
-
-      if (pwdError) {
-        alert('系統錯誤：' + pwdError.message);
-        return;
-      }
-
-      if (!matched) {
-        alert('🔒 會員密碼錯誤，請確認後再試一次！');
-        return;
-      }
-    }
-
-    const now = new Date();
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const currentTimeValue = currentHours * 100 + currentMinutes;
-    const todayStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
-
-    // 🆕 依分區的截止時間判斷（早上三區 8:30 截止；晚上散打 18:30 截止）
-    const timing = SESSION_TIMING[selectedType];
-    if (activeDate === todayStr && currentTimeValue >= timing.cutoff) {
-      alert(`🚫 抱歉！今天的【${currentTypeConfig.label}】報名已於 ${formatTimeVal(timing.cutoff)} 截止囉！`);
-      return;
-    }
-
+    const trimmedName = form.name.trim();
+    if (!trimmedName) { alert('請輸入要顯示在名單上的暱稱！'); return; }
     const numericCount = parseInt(form.count);
-
-    // 🆕 三個分區各自的單筆報名人數上限
     if (numericCount < 1 || numericCount > currentTypeConfig.perSubmitMax) {
       alert(`🚫 ${currentTypeConfig.label} 單筆報名最多 ${currentTypeConfig.perSubmitMax} 位球友喔！`);
       return;
     }
 
-    // 🆕 身份驗證改用 LINE 登入（黑名單/白名單比對用），但顯示在名單上的名字改用自己打的暱稱，
-    //    兩者分開：暱稱只是給別人看的，真正認人是靠 LINE 帳號
-    if (!lineSession?.loggedIn) {
-      alert('🔒 請先使用 LINE 登入才能報名！');
+    let res;
+    let result;
+    try {
+      res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dateKey: activeDate,
+          typeId: selectedType,
+          name: trimmedName,
+          count: numericCount,
+          zonePassword: zonePasswords[submitGroup] || ''
+        })
+      });
+      result = await res.json();
+    } catch (e) {
+      alert('網路錯誤，請稍後再試一次！');
       return;
     }
-    const myLineUserId = lineSession.lineUserId;
-    const trimmedName = form.name.trim();
-    if (!trimmedName) { alert('請輸入要顯示在名單上的暱稱！'); return; }
 
-    // 🆕 同一個 LINE 帳號在同一場次不能重複報名
-    if (list.some(item => item.line_user_id === myLineUserId)) {
-      alert(`❌ 您（${trimmedName}）已經報名過本場次囉！`);
-      return;
-    }
-
-    // 🆕 停權檢查：改用 LINE 使用者 ID 比對，換顯示名稱也擋得住，真正擋下報名
-    const { data: blockRecord } = await supabase.from('pickleball_blacklists').select('blocked_until').eq('line_user_id', myLineUserId).maybeSingle();
-    if (blockRecord?.blocked_until) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (new Date(blockRecord.blocked_until) >= today) {
-        alert(`🚫 您的帳號目前處於停權狀態（至 ${blockRecord.blocked_until} 止），無法報名！如有疑問請洽幹部。`);
-        return;
+    if (!result.ok) {
+      alert(result.error || '報名失敗，請稍後再試！');
+      if (res.status === 403 && String(result.error || '').includes('密碼')) {
+        setZonePasswords(prev => ({ ...prev, [submitGroup]: '' }));
       }
+      if (res.status === 401) refreshData();
+      return;
     }
 
-    // 🆕 查詢是否已在審核通過白名單中：先比對 LINE 使用者 ID，
-    //    比對不到的話（例如舊資料當初只用姓名核准、line_user_id 是空的），退回用姓名比對，
-    //    避免已經審核過的舊資料被誤判成「首次報名」又要重審一次
-    let approvedRecord = null;
-    const { data: approvedByLineId } = await supabase.from('approved_names').select('id').eq('line_user_id', myLineUserId).maybeSingle();
-    if (approvedByLineId) {
-      approvedRecord = approvedByLineId;
-    } else {
-      const { data: approvedByName } = await supabase.from('approved_names').select('id').eq('name', trimmedName).maybeSingle();
-      approvedRecord = approvedByName;
-    }
-    const reviewStatus = approvedRecord ? 'approved' : 'pending';
-
-    const { error } = await supabase.from('pickleball_registrations').insert([{
-      name: trimmedName,
-      count: numericCount,
-      line_user_id: myLineUserId,
-      session_id: currentSessionId,
-      created_at: new Date().toISOString(),
-      arrived: false,
-      review_status: reviewStatus
-    }]);
-
-    if (error) {
-      alert('報名失敗：' + error.message);
-    } else {
+    const reviewStatus = result.reviewStatus;
+    {
       if (reviewStatus === 'pending') {
         alert('✅ 報名已送出！這是您第一次報名，需要管理員審核通過後才會確認正取/備取資格。審核通過後之後報名將不需再審核。');
       } else {
@@ -1252,20 +1182,20 @@ export default function Home() {
 
     if (!confirm(`確定要取消【${item.name}】的報名嗎？`)) return;
 
-    const { data, error } = await supabase
-      .from('pickleball_registrations')
-      .delete()
-      .eq('id', item.id)
-      .eq('line_user_id', lineSession.lineUserId)
-      .select();
-
-    if (error) {
-      alert('系統錯誤：' + error.message);
+    let result;
+    try {
+      const res = await fetch('/api/cancel-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id })
+      });
+      result = await res.json();
+    } catch (e) {
+      alert('網路錯誤，請稍後再試一次！');
       return;
     }
-
-    if (!data || data.length === 0) {
-      alert('❌ 取消失敗，請重新整理頁面後再試一次！');
+    if (!result.ok) {
+      alert(result.error || '取消失敗，請重新整理頁面後再試一次！');
       return;
     }
 
@@ -1288,14 +1218,22 @@ export default function Home() {
       return;
     }
     if (n === item.count) return;
-    const { data, error } = await supabase
-      .from('pickleball_registrations')
-      .update({ count: n })
-      .eq('id', item.id)
-      .eq('line_user_id', lineSession.lineUserId)
-      .select();
-    if (error) { alert('系統錯誤：' + error.message); return; }
-    if (!data || data.length === 0) { alert('❌ 修改失敗，請重新整理頁面後再試一次！'); return; }
+    let result;
+    try {
+      const res = await fetch('/api/update-registration-count', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, count: n })
+      });
+      result = await res.json();
+    } catch (e) {
+      alert('網路錯誤，請稍後再試一次！');
+      return;
+    }
+    if (!result.ok) {
+      alert(result.error || '修改失敗，請重新整理頁面後再試一次！');
+      return;
+    }
     alert(`✅ 已將人數修改為 ${n} 位！（若名額不足，可能會自動轉為備取）`);
     refreshData();
     fetchAllZoneLists(activeDate);
