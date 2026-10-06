@@ -143,6 +143,7 @@ export default function SatAdminPortal() {
   // ───────── 每週密碼 ─────────
   const [pwNewbie, setPwNewbie] = useState('');
   const [pwOpenplay, setPwOpenplay] = useState('');
+  const [pwSource, setPwSource] = useState({ newbie: '', openplay: '' }); // 目前顯示的密碼是從哪一週設定的
 
   // ───────── 審核 / 缺席 / 黑名單 ─────────
   const [pendingList, setPendingList] = useState([]);
@@ -240,9 +241,13 @@ export default function SatAdminPortal() {
   // ───────── 每週密碼 ─────────
   const loadWeekPasswords = async () => {
     if (!weekKey) return;
-    const { data } = await supabase.from('zone_passwords').select('zone_group, password').eq('week_key', weekKey);
-    setPwNewbie(data?.find(r => r.zone_group === 'newbie')?.password || '');
-    setPwOpenplay(data?.find(r => r.zone_group === 'openplay')?.password || '');
+    // 密碼設定一次就一直沿用：取「這一週或更早」最近一次設定的密碼
+    const { data } = await supabase.from('zone_passwords').select('week_key, zone_group, password').lte('week_key', weekKey).order('week_key', { ascending: false });
+    const newbieRow = data?.find(r => r.zone_group === 'newbie');
+    const openplayRow = data?.find(r => r.zone_group === 'openplay');
+    setPwNewbie(newbieRow?.password || '');
+    setPwOpenplay(openplayRow?.password || '');
+    setPwSource({ newbie: newbieRow?.week_key || '', openplay: openplayRow?.week_key || '' });
   };
   const handleSavePasswords = async () => {
     const rows = [];
@@ -251,7 +256,8 @@ export default function SatAdminPortal() {
     if (rows.length === 0) { alert('請至少輸入一組密碼！'); return; }
     const { error } = await supabase.from('zone_passwords').upsert(rows, { onConflict: 'week_key,zone_group' });
     if (error) { alert('儲存失敗：' + error.message); return; }
-    alert(`✅ 已儲存【${weekKey} 這一週】的密碼（週一／四／五／六共用）`);
+    alert(`✅ 已儲存！從【${weekKey} 這一週】起生效，之後每週都沿用這組密碼，直到你再重新設定為止。`);
+    loadWeekPasswords();
   };
 
   // ───────── 人數與場地費設定 ─────────
@@ -792,7 +798,7 @@ export default function SatAdminPortal() {
           <h2 className="text-xl font-black text-indigo-900 flex items-center gap-2">
             🔑 每週分區密碼（{weekKey} 這一週）
           </h2>
-          <div className="text-xs font-bold text-slate-500">一組密碼對整週有效：週一、週四、週五、週六都用同一組。切換上方的場次日期就能設定其他週。</div>
+          <div className="text-xs font-bold text-slate-500">密碼設定一次就會一直沿用，每週不用重設；要換密碼時，在這裡輸入新密碼並儲存，從這一週起生效。週一、週四、週五、週六共用同一組。</div>
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-sm font-bold text-slate-700">🌱 新手區密碼（新手友善場／新手體驗）</label>
@@ -802,6 +808,7 @@ export default function SatAdminPortal() {
                 placeholder="尚未設定"
                 className="w-full bg-slate-50 border p-3 rounded-xl font-black text-lg outline-none focus:ring-2 focus:ring-indigo-300"
               />
+              {pwSource.newbie && pwSource.newbie !== weekKey && <div className="text-xs font-bold text-emerald-600">沿用自 {pwSource.newbie} 那週設定的密碼</div>}
             </div>
             <div className="space-y-1">
               <label className="text-sm font-bold text-slate-700">🔥 散打區密碼（一般散打／3.0以上 球敘）</label>
@@ -811,10 +818,11 @@ export default function SatAdminPortal() {
                 placeholder="尚未設定"
                 className="w-full bg-slate-50 border p-3 rounded-xl font-black text-lg outline-none focus:ring-2 focus:ring-indigo-300"
               />
+              {pwSource.openplay && pwSource.openplay !== weekKey && <div className="text-xs font-bold text-emerald-600">沿用自 {pwSource.openplay} 那週設定的密碼</div>}
             </div>
           </div>
           <button onClick={handleSavePasswords} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-2xl text-base transition-colors shadow-md">
-            儲存這一週的密碼
+            儲存並從這一週起生效
           </button>
         </div>
 
