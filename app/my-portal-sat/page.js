@@ -442,7 +442,7 @@ export default function SatAdminPortal() {
 
     // 同步把次數寫回 pickleball_blacklists.no_show_count，讓前台登入時的「未報到提醒」跟後台統計一致
     try {
-      const { data: bl } = await supabase.from('pickleball_blacklists').select('id, line_user_id, no_show_count');
+      const { data: bl } = await supabase.from('pickleball_blacklists').select('name, line_user_id, no_show_count');
       const existingByLine = new Map();
       (bl || []).forEach(r => { if (r.line_user_id) existingByLine.set(r.line_user_id, r); });
       const computedLineIds = new Set();
@@ -456,7 +456,7 @@ export default function SatAdminPortal() {
       }
       for (const r of (bl || [])) {
         if (r.line_user_id && !computedLineIds.has(r.line_user_id) && (r.no_show_count || 0) > 0) {
-          await supabase.from('pickleball_blacklists').update({ no_show_count: 0 }).eq('id', r.id);
+          await supabase.from('pickleball_blacklists').update({ no_show_count: 0 }).eq('line_user_id', r.line_user_id);
         }
       }
     } catch (err) {}
@@ -531,7 +531,9 @@ export default function SatAdminPortal() {
   };
   const handleRemoveBlacklist = async (b) => {
     if (!confirm(`確定要解除「${b.name}」的停權？`)) return;
-    const { error } = await supabase.from('pickleball_blacklists').update({ blocked_until: null }).eq('id', b.id);
+    // 黑名單資料表沒有 id 欄位，改用 LINE 使用者 ID（沒有的舊資料用姓名）當依據
+    const q = supabase.from('pickleball_blacklists').update({ blocked_until: null });
+    const { error } = await (b.line_user_id ? q.eq('line_user_id', b.line_user_id) : q.eq('name', b.name));
     if (error) { alert(`解除失敗：${error.message}`); return; }
     // 寫入豁免時間：從這個時間點開始重新計算未到場次數
     const overrideKey = b.line_user_id || ('name:' + (b.name || '').trim());
@@ -1245,7 +1247,7 @@ export default function SatAdminPortal() {
                   todayStart.setHours(0, 0, 0, 0);
                   const isExpired = b.blocked_until && new Date(b.blocked_until) < todayStart;
                   return (
-                    <div key={b.id} className={`p-3 rounded-xl border flex justify-between items-center ${isExpired ? 'bg-slate-50/50 border-slate-200 opacity-60' : 'bg-slate-50 border-rose-200'}`}>
+                    <div key={b.line_user_id || b.name} className={`p-3 rounded-xl border flex justify-between items-center ${isExpired ? 'bg-slate-50/50 border-slate-200 opacity-60' : 'bg-slate-50 border-rose-200'}`}>
                       <div>
                         <span className="font-black text-slate-800 mr-2">{b.name}{b.line_user_id && lineNames[b.line_user_id] ? <span className="text-slate-500 font-bold">（{lineNames[b.line_user_id]}）</span> : null}</span>
                         <span className={`text-xs font-bold ${isExpired ? 'text-slate-400' : 'text-rose-600'}`}>
