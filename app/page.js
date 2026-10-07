@@ -81,13 +81,17 @@ const SESSION_TYPES = {
   AM: ['experience', 'normal', 'openplay', 'advanced'],
   PM: ['experience_pm', 'normal_pm', 'openplay_pm', 'advanced_pm']
 };
-const DEFAULT_CAPACITY = { experience: 9, normal: 8, openplay: 10, advanced: 10, experience_pm: 9, normal_pm: 9, openplay_pm: 9, advanced_pm: 10 };
-// 🆕 週一/週四/週五（都是晚上場）的永久預設人數：新手體驗0、新手友善9、一般散打18、3.0以上 球敘10
-const WEEKDAY_PM_DEFAULT_CAPACITY = { experience_pm: 0, normal_pm: 9, openplay_pm: 18, advanced_pm: 10 };
+// 各星期的預設人數（後台沒另外設定時使用）
+const SAT_CAPACITY = { experience: 0, normal: 9, openplay: 9, advanced: 8, experience_pm: 0, normal_pm: 9, openplay_pm: 9, advanced_pm: 8 };
+const MON_THU_CAPACITY = { experience: 0, normal: 0, openplay: 0, advanced: 0, experience_pm: 0, normal_pm: 9, openplay_pm: 18, advanced_pm: 0 };
+const FRI_CAPACITY = { experience: 0, normal: 0, openplay: 0, advanced: 0, experience_pm: 0, normal_pm: 16, openplay_pm: 9, advanced_pm: 0 };
+const DEFAULT_CAPACITY = SAT_CAPACITY;
 function getDefaultCapacity(dateKey) {
   const [y, m, d] = String(dateKey).split('/').map(Number);
   const dow = new Date(y, (m || 1) - 1, d || 1).getDay();
-  return dow === 6 ? DEFAULT_CAPACITY : { ...DEFAULT_CAPACITY, ...WEEKDAY_PM_DEFAULT_CAPACITY };
+  if (dow === 6) return SAT_CAPACITY;
+  if (dow === 5) return FRI_CAPACITY;
+  return MON_THU_CAPACITY;
 }
 
 // 🆕 首頁導覽：先選星期幾 → 選新手區/散打區（要輸入本週密碼＋LINE 登入）→ 選細項
