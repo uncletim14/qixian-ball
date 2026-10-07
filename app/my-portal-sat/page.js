@@ -32,13 +32,11 @@ const defaultVenueFee = dateStr => (dateStr >= DEFAULT_VENUE_FEE_START ? 600 : 0
 
 // 各場次人數預設值（沒在後台設定過時用）
 function getDefaultCapacityFor(dateStr, session) {
-  if (dowOf(dateStr) === 6) {
-    return session === 'AM'
-      ? { experience: 9, normal: 8, openplay: 10, advanced: 10 }
-      : { experience: 9, normal: 9, openplay: 9, advanced: 10 };
-  }
-  // 週一/四/五（晚上場）：新手體驗0、新手友善9、一般散打18、3.0以上 球敘10
-  return { experience: 0, normal: 9, openplay: 18, advanced: 10 };
+  const dow = dowOf(dateStr);
+  if (dow === 6) return { experience: 0, normal: 9, openplay: 9, advanced: 8 }; // 週六早上／晚上相同
+  if (dow === 5) return session === 'PM' ? { experience: 0, normal: 16, openplay: 9, advanced: 0 } : { experience: 0, normal: 0, openplay: 0, advanced: 0 };
+  // 週一/四（晚上場）
+  return session === 'PM' ? { experience: 0, normal: 9, openplay: 18, advanced: 0 } : { experience: 0, normal: 0, openplay: 0, advanced: 0 };
 }
 function capacityMap(row, dateStr) {
   const out = {};
