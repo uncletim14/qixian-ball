@@ -28,7 +28,8 @@ const dowOf = s => parseDate(s).getDay();
 // 該日期所屬那一週的星期六（每週密碼用它當代號）
 const weekKeyOf = s => { const d = parseDate(s); d.setDate(d.getDate() + (6 - d.getDay())); return fmtDate(d); };
 const typeIdFor = (base, session) => (session === 'PM' ? base + '_pm' : base);
-const defaultVenueFee = dateStr => (dateStr >= DEFAULT_VENUE_FEE_START ? 600 : 0);
+// 場地費預設：星期六早上場 200，其他場次 600（歷史場次不套用）
+const defaultVenueFee = (dateStr, sess) => (dateStr < DEFAULT_VENUE_FEE_START ? 0 : (dowOf(dateStr) === 6 && sess === 'AM' ? 200 : 600));
 
 // 各場次人數預設值（沒在後台設定過時用）
 function getDefaultCapacityFor(dateStr, session) {
@@ -229,7 +230,8 @@ export default function SatAdminPortal() {
     const inputs = {};
     BASES.forEach(b => { inputs[b] = capMap[typeIdFor(b, sess)]; });
     setCapInputs(inputs);
-    setVenueFeeInput(setRow && setRow.venue_fee !== undefined && setRow.venue_fee !== null ? setRow.venue_fee : defaultVenueFee(date));
+    const feeCol = (dowOf(date) === 6 && selectedSession === 'PM') ? 'venue_fee_pm' : 'venue_fee';
+    setVenueFeeInput(setRow && setRow[feeCol] !== undefined && setRow[feeCol] !== null ? setRow[feeCol] : defaultVenueFee(date, selectedSession));
     setCancelled({
       AM: !!statusRows?.find(r => r.date_key === `${date}_AM`)?.is_cancelled,
       PM: !!statusRows?.find(r => r.date_key === `${date}_PM`)?.is_cancelled
@@ -267,7 +269,9 @@ export default function SatAdminPortal() {
   };
   const handleSaveSettings = async (e) => {
     e.preventDefault();
-    const payload = { date_key: selectedDate, venue_fee: venueFeeInput };
+    // 星期六早上場、晚上場的場地費各自獨立：早上存 venue_fee，晚上存 venue_fee_pm
+    const feeCol = (dowOf(selectedDate) === 6 && selectedSession === 'PM') ? 'venue_fee_pm' : 'venue_fee';
+    const payload = { date_key: selectedDate, [feeCol]: venueFeeInput };
     if (!isTeamPracticeDay) {
       BASES.forEach(b => { payload[typeIdFor(b, selectedSession) + '_max'] = parseInt(capInputs[b]) || 0; });
     }
@@ -295,7 +299,8 @@ export default function SatAdminPortal() {
     const amountNum = parseInt(finAmount);
     if (isNaN(amountNum) || amountNum <= 0) { alert('請輸入有效的金額！'); return; }
     const { error } = await supabase.from('financial_records').insert([{
-      date_key: selectedDate, type: finType, category: finCategory, amount: amountNum, note: finNote.trim()
+      date_key: selectedDate, type: finType, category: finCategory, amount: amountNum, note: finNote.trim(),
+      session: dowOf(selectedDate) === 6 ? selectedSession : null
     }]);
     if (error) { alert(`新增失敗：${error.message}`); return; }
     setFinAmount('');
@@ -577,6 +582,7 @@ export default function SatAdminPortal() {
   ALL_TYPE_IDS.forEach(typeId => {
     const base = typeId.replace('_pm', '');
     const sess = typeId.endsWith('_pm') ? 'PM' : 'AM';
+    if (!isTeamPracticeDay && sess !== selectedSession) return; // 早上場、晚上場分開計算
     if (cancelled[sess]) return;
     const items = dayRegs.filter(r => r.session_id === `${selectedDate}_${typeId}`);
     const { main } = splitStrict(items, capacities[typeId] ?? 0);
@@ -584,12 +590,14 @@ export default function SatAdminPortal() {
     totalExpectedIncome += ok.reduce((s, it) => s + (Number(it.count) || 0), 0) * PRICE[base];
     totalActualRegistrationIncome += ok.filter(it => it.arrived).reduce((s, it) => s + (Number(it.count) || 0), 0) * PRICE[base];
   });
-  const extraIncomeTotal = financialRecords.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
-  const extraExpenseTotal = financialRecords.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
+  const isSatDay = !!selectedDate && dowOf(selectedDate) === 6;
+  // 星期六：只算目前選的那一場（舊紀錄沒有場次標記的，視為早上場）
+  const visibleFin = isSatDay ? financialRecords.filter(r => (r.session || 'AM') === selectedSession) : financialRecords;
+  const extraIncomeTotal = visibleFin.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
+  const extraExpenseTotal = visibleFin.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
   const totalActualIncome = totalActualRegistrationIncome + extraIncomeTotal;
-  // 場地費整天共用一筆：當天所有場次都取消才歸零
-  const daySessions = isTeamPracticeDay ? [] : (selectedDate && dowOf(selectedDate) === 6 ? ['AM', 'PM'] : ['PM']);
-  const allCancelledToday = daySessions.length > 0 && daySessions.every(s => cancelled[s]);
+  // 場地費依場次分開：該場次因雨取消就歸零
+  const allCancelledToday = !isTeamPracticeDay && !!cancelled[selectedSession];
   const effectiveVenueFee = allCancelledToday ? 0 : venueFeeInput;
   const totalDayExpense = effectiveVenueFee + extraExpenseTotal;
   const netProfit = totalActualIncome - totalDayExpense;
@@ -635,9 +643,10 @@ export default function SatAdminPortal() {
     if (allDates.length === 0) { alert(`【${selectedMonth}】月份目前尚無任何活動與財務紀錄！`); return; }
 
     const label = (d) => `${d}(${DAY_NAMES[dowOf(d)]})`;
-    const venueOf = (d) => {
+    const venueOf = (d, sess) => {
       const row = settingByDate[d];
-      return row && row.venue_fee !== undefined && row.venue_fee !== null ? row.venue_fee : defaultVenueFee(d);
+      const col = (dowOf(d) === 6 && sess === 'PM') ? 'venue_fee_pm' : 'venue_fee';
+      return row && row[col] !== undefined && row[col] !== null ? row[col] : defaultVenueFee(d, sess);
     };
     const regDates = allDates.filter(d => dowOf(d) !== 2);
     const teamDates = allDates.filter(d => dowOf(d) === 2);
@@ -651,32 +660,29 @@ export default function SatAdminPortal() {
       csv += '日期,新手友善場正取(到場),新手體驗正取(到場),一般散打正取(到場),3.0以上球敘正取(到場),報名費實收,現場附加收入,場地費支出,現場附加支出,當日純益\n';
       regDates.forEach(d => {
         const cap = capacityMap(settingByDate[d], d);
-        let regIncome = 0;
-        const cells = [];
-        BASES.forEach(base => {
-          let confirmed = 0, present = 0;
-          ['AM', 'PM'].forEach(sess => {
+        const isSat = dowOf(d) === 6;
+        // 星期六早上場、晚上場各一列；其他日子只有晚上場一列
+        (isSat ? ['AM', 'PM'] : ['PM']).forEach(sess => {
+          let regIncome = 0;
+          const cells = [];
+          BASES.forEach(base => {
             const typeId = typeIdFor(base, sess);
             const items = regs.filter(r => r.session_id === `${d}_${typeId}`);
             const { main } = splitStrict(items, cap[typeId]);
             const ok = main.filter(it => it.review_status !== 'pending');
-            const c = ok.reduce((s, it) => s + (Number(it.count) || 0), 0);
-            const p = ok.filter(it => it.arrived).reduce((s, it) => s + (Number(it.count) || 0), 0);
-            confirmed += c;
-            present += p;
-            if (!cancelledSet.has(`${d}_${sess}`)) regIncome += p * PRICE[base];
+            const confirmed = ok.reduce((s, it) => s + (Number(it.count) || 0), 0);
+            const present = ok.filter(it => it.arrived).reduce((s, it) => s + (Number(it.count) || 0), 0);
+            if (!cancelledSet.has(`${d}_${sess}`)) regIncome += present * PRICE[base];
+            cells.push(`${confirmed}人(到場${present}人)`);
           });
-          cells.push(`${confirmed}人(到場${present}人)`);
+          const dayFin = (finAll || []).filter(r => r.date_key === d && (!isSat || (r.session || 'AM') === sess));
+          const extraIn = dayFin.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
+          const extraOut = dayFin.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
+          const venue = cancelledSet.has(`${d}_${sess}`) ? 0 : venueOf(d, sess);
+          const profit = (regIncome + extraIn) - (venue + extraOut);
+          gReg += regIncome; gExtraIn += extraIn; gVenue += venue; gExtraOut += extraOut; gNet += profit;
+          csv += `${label(d)}${isSat ? (sess === 'AM' ? ' 早上場' : ' 晚上場') : ''},${cells.join(',')},$${regIncome},$${extraIn},$${venue},$${extraOut},$${profit}\n`;
         });
-        const dayFin = (finAll || []).filter(r => r.date_key === d);
-        const extraIn = dayFin.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
-        const extraOut = dayFin.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
-        const sessionsOfDay = dowOf(d) === 6 ? ['AM', 'PM'] : ['PM'];
-        const allCancelled = sessionsOfDay.every(s => cancelledSet.has(`${d}_${s}`));
-        const venue = allCancelled ? 0 : venueOf(d);
-        const profit = (regIncome + extraIn) - (venue + extraOut);
-        gReg += regIncome; gExtraIn += extraIn; gVenue += venue; gExtraOut += extraOut; gNet += profit;
-        csv += `${label(d)},${cells.join(',')},$${regIncome},$${extraIn},$${venue},$${extraOut},$${profit}\n`;
       });
       csv += '打球日小計,,,,,,,,,\n';
       csv += `總報名費實收: $${gReg},總附加收入: $${gExtraIn},總場地費支出: $${gVenue},總附加支出: $${gExtraOut},報名場次淨利: $${gNet}\n\n`;
@@ -980,7 +986,7 @@ export default function SatAdminPortal() {
         {/* 💵 現場收支記帳與結算區 */}
         <div className="bg-white p-6 rounded-3xl shadow-sm space-y-6 border-2 border-emerald-100">
           <h2 className="text-xl font-black text-emerald-900 flex items-center gap-2">
-            🧾 {isTeamPracticeDay ? '球隊練習' : '現場'}收支記帳與結算 ({selectedDate}{!isTeamPracticeDay && selectedDate && dowOf(selectedDate) === 6 ? '，早上＋晚上合計' : ''})
+            🧾 {isTeamPracticeDay ? '球隊練習' : '現場'}收支記帳與結算 ({selectedDate}{!isTeamPracticeDay && isSatDay ? (selectedSession === 'AM' ? '，早上場' : '，晚上場') : ''})
           </h2>
 
           <form onSubmit={handleAddFinancialRecord} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-wrap gap-3 items-center">
@@ -1041,11 +1047,11 @@ export default function SatAdminPortal() {
             </button>
           </form>
 
-          {financialRecords.length > 0 && (
+          {visibleFin.length > 0 && (
             <div className="space-y-2 border-t pt-4">
-              <span className="text-xs font-bold text-slate-400 uppercase">當日現場附加明細：</span>
+              <span className="text-xs font-bold text-slate-400 uppercase">{isSatDay ? (selectedSession === 'AM' ? '早上場' : '晚上場') : '當日'}現場附加明細：</span>
               <div className="grid md:grid-cols-2 gap-3">
-                {financialRecords.map((r) => (
+                {visibleFin.map((r) => (
                   <div key={r.id} className="bg-white p-3 rounded-xl border flex justify-between items-center shadow-xs">
                     <div className="flex items-center gap-2">
                       <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${r.type === 'income' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
@@ -1079,13 +1085,15 @@ export default function SatAdminPortal() {
           </div>
           <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 text-center">
             <span className="text-xs font-bold text-slate-400 uppercase">總支出 (場租+其他)</span>
-            <div className="text-3xl font-black text-rose-600 mt-1">${totalDayExpense}</div>
+            <div className="text-3xl font-black text-rose-600 mt-1">
+              {showVenueFeeInput ? `$${totalDayExpense}` : (effectiveVenueFee > 0 ? (extraExpenseTotal > 0 ? `場地費 + $${extraExpenseTotal}` : '場地費') : `$${totalDayExpense}`)}
+            </div>
             {allCancelledToday && (
               <div className="text-[10px] font-bold text-red-500 mt-1">⛈️ 因雨取消，場地費已歸零</div>
             )}
           </div>
           <div className="bg-white p-5 rounded-3xl shadow-sm border-2 border-emerald-300 text-center bg-emerald-50/30">
-            <span className="text-xs font-bold text-emerald-800 uppercase">當日純益</span>
+            <span className="text-xs font-bold text-emerald-800 uppercase">{isSatDay ? (selectedSession === 'AM' ? '早上場純益' : '晚上場純益') : '當日純益'}</span>
             <div className={`text-3xl font-black mt-1 ${netProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
               ${netProfit}
             </div>
