@@ -1367,6 +1367,19 @@ export default function Home() {
                   <p className="flex items-center justify-center gap-1"><span>⏰</span> 網站報名每週六晚上 10 點更新下週報名</p>
                   <p>非會員星期三晚上 10 點後開放報名星期六球敘</p>
                 </div>
+
+                {/* 💬 加入 LINE 官方帳號（備取遞補通知需要先加好友） */}
+                <div className="flex flex-col items-center gap-1.5 pt-1">
+                  <a
+                    href="https://line.me/R/ti/p/@828bvtew"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-[#06C755] hover:bg-[#05b34c] active:scale-95 transition text-white font-black text-xs sm:text-base px-4 py-1.5 rounded-full shadow"
+                  >
+                    <span>💬</span> 加入官方帳號好友
+                  </a>
+                  <p className="text-[#17587f] text-[11px] sm:text-sm font-bold">加入後，備取遞補成功會即時 LINE 通知你</p>
+                </div>
               </div>
             </>
           )}
