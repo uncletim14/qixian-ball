@@ -138,6 +138,10 @@ export default function SatAdminPortal() {
   const [finAmount, setFinAmount] = useState('');
   const [finNote, setFinNote] = useState('');
   const [adminCategoryFilter, setAdminCategoryFilter] = useState('ALL');
+  // 後台代客報名（沒有 LINE 的球友，例如外國球友）
+  const [addName, setAddName] = useState('');
+  const [addCount, setAddCount] = useState(1);
+  const [addBase, setAddBase] = useState('normal');
 
   // ───────── 每週密碼 ─────────
   const [pwNewbie, setPwNewbie] = useState('');
@@ -558,6 +562,28 @@ export default function SatAdminPortal() {
   const deleteParticipant = async (p) => {
     if (!confirm(`幹部權限：確定要刪除「${p.name}」的報名？`)) return;
     await supabase.from('pickleball_registrations').delete().eq('id', p.id);
+    loadDay();
+    fetchAbsenceSummary();
+  };
+
+  // ───────── 後台代客報名 ─────────
+  const handleAdminAddRegistration = async (e) => {
+    e.preventDefault();
+    const name = addName.trim();
+    const count = parseInt(addCount) || 1;
+    if (!name) { alert('請輸入姓名！'); return; }
+    if (count < 1 || count > 10) { alert('人數請填 1～10 位！'); return; }
+    const typeId = typeIdFor(addBase, selectedSession);
+    const sessionId = `${selectedDate}_${typeId}`;
+    const dup = dayRegs.some(r => r.session_id === sessionId && (r.name || '').trim() === name);
+    if (dup && !confirm(`【${name}】在這個分區已經報名過了，確定要再新增一筆嗎？`)) return;
+    const { error } = await supabase.from('pickleball_registrations').insert([{
+      name, count, session_id: sessionId, line_user_id: null,
+      created_at: new Date().toISOString(), arrived: false, review_status: 'approved'
+    }]);
+    if (error) { alert('新增失敗：' + error.message); return; }
+    setAddName('');
+    setAddCount(1);
     loadDay();
     fetchAbsenceSummary();
   };
@@ -1327,6 +1353,42 @@ export default function SatAdminPortal() {
             </div>
           </div>
 
+          {/* ➕ 後台代客報名：沒有 LINE 的球友（例如外國球友）由幹部直接幫忙報名 */}
+          <form onSubmit={handleAdminAddRegistration} className="bg-sky-50 border border-sky-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
+            <span className="font-black text-sky-900 text-sm">➕ 後台代報名（無 LINE 球友）</span>
+            <select
+              value={addBase}
+              onChange={e => setAddBase(e.target.value)}
+              className="p-2.5 border rounded-xl font-bold bg-white text-sm"
+            >
+              {BASES.map(b => (
+                <option key={b} value={b}>{BASE_ICON[b]} {BASE_LABEL[b]}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="姓名"
+              value={addName}
+              onChange={e => setAddName(e.target.value)}
+              maxLength={30}
+              className="flex-1 min-w-[140px] bg-white border p-2.5 rounded-xl font-bold text-sm outline-none"
+            />
+            <div className="flex items-center gap-1 bg-white border p-1.5 rounded-xl">
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={addCount}
+                onChange={e => setAddCount(e.target.value)}
+                className="w-14 font-black text-center text-base outline-none"
+              />
+              <span className="text-sm font-bold text-slate-500 pr-1">位</span>
+            </div>
+            <button className="bg-sky-600 hover:bg-sky-700 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow-sm">
+              新增報名
+            </button>
+          </form>
+
           <div className="space-y-3">
             {filteredParticipants.map((p) => (
               <div
@@ -1348,6 +1410,7 @@ export default function SatAdminPortal() {
                     {p.review_status === 'pending' ? '⏳ 審核中' : p.isConfirmed ? '正取' : '備取'}
                   </span>
                   <span className="font-bold text-xl text-slate-800">{p.name}</span>
+                  {!p.line_user_id && <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-sky-100 text-sky-700">後台新增</span>}
                   <span className="text-slate-600 font-bold">
                     ({BASE_ICON[p.base]} {BASE_LABEL[p.base]} - {p.count}位)
                   </span>
