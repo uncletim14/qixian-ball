@@ -279,11 +279,13 @@ export default function SatAdminPortal() {
     if (!isTeamPracticeDay) {
       BASES.forEach(b => { payload[typeIdFor(b, selectedSession) + '_max'] = parseInt(capInputs[b]) || 0; });
     }
+    const snaps = !isTeamPracticeDay ? await snapshotMain(BASES.map(b => `${selectedDate}_${typeIdFor(b, selectedSession)}`)) : null;
     const { error } = await supabase.from('event_settings').upsert(payload, { onConflict: 'date_key' });
     if (error) { alert(`儲存失敗：${error.message}`); return; }
     alert(`🎉 成功儲存【${selectedDateLabel}】人數與場地費設定！`);
     setShowVenueFeeInput(false);
     loadDay();
+    await notifyAfterChange(snaps);
   };
   const handleToggleCancel = async () => {
     const sess = selectedSession;
@@ -330,6 +332,38 @@ export default function SatAdminPortal() {
     setAvailableMonths(months);
   };
 
+  // ───────── 備取遞補 LINE 通知（後台操作造成遞補時，通知遞補成功的球友）─────────
+  const callAdminNotify = async (payload) => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) return null;
+      const res = await fetch('/api/admin-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+      const r = await res.json();
+      return r && r.ok ? r : null;
+    } catch (e) { return null; }
+  };
+  // 變動「之前」先記下各場次目前的正取名單
+  const snapshotMain = async (sessionIds) => {
+    const r = await callAdminNotify({ mode: 'snapshot', sessionIds });
+    return r ? r.snapshots : null;
+  };
+  // 變動「之後」比對，新變成正取的人發 LINE 通知
+  const notifyAfterChange = async (snapshots) => {
+    if (!snapshots) return;
+    const r = await callAdminNotify({ mode: 'notify', snapshots });
+    if (!r || !r.promoted) return;
+    let msg = `🎉 有 ${r.promoted} 位備取遞補成正取，已用 LINE 通知 ${r.sent} 位。`;
+    if (r.unreachable && r.unreachable.length > 0) {
+      msg += `\n⚠️ 以下的人沒收到 LINE 通知（沒加官方帳號好友或沒有 LINE），請自行聯絡：\n${r.unreachable.join('、')}`;
+    }
+    alert(msg);
+  };
+
   // ───────── 報名審核 ─────────
   const fetchPending = async () => {
     const { data } = await supabase.from('pickleball_registrations').select('*').eq('review_status', 'pending').order('created_at', { ascending: true });
@@ -354,9 +388,11 @@ export default function SatAdminPortal() {
   };
   const handleRejectParticipant = async (p) => {
     if (!confirm(`確定要拒絕「${p.name}」這筆報名嗎？（將直接刪除此筆報名）`)) return;
+    const snaps = p.session_id ? await snapshotMain([p.session_id]) : null;
     const { error } = await supabase.from('pickleball_registrations').delete().eq('id', p.id);
     if (error) { alert(`拒絕失敗：${error.message}`); return; }
     alert(`已拒絕並刪除「${p.name}」的報名`);
+    await notifyAfterChange(snaps);
     fetchPending();
     loadDay();
   };
@@ -561,9 +597,11 @@ export default function SatAdminPortal() {
   };
   const deleteParticipant = async (p) => {
     if (!confirm(`幹部權限：確定要刪除「${p.name}」的報名？`)) return;
+    const snaps = p.session_id ? await snapshotMain([p.session_id]) : null;
     await supabase.from('pickleball_registrations').delete().eq('id', p.id);
     loadDay();
     fetchAbsenceSummary();
+    await notifyAfterChange(snaps);
   };
 
   // ───────── 後台代客報名 ─────────
@@ -586,6 +624,43 @@ export default function SatAdminPortal() {
     setAddCount(1);
     loadDay();
     fetchAbsenceSummary();
+  };
+
+  // ───────── 後台修改報名人數（任何一筆報名都可以改，包含後台代報名的） ─────────
+  const handleAdminEditCount = async (p) => {
+    const input = prompt(`【${p.name}】目前報名 ${p.count} 位，請輸入新的人數（1~10）：`, String(p.count));
+    if (input === null) return;
+    const n = parseInt(input, 10);
+    if (!Number.isInteger(n) || n < 1 || n > 10) { alert('❌ 人數請輸入 1 到 10 之間的數字！'); return; }
+    if (n === Number(p.count)) return;
+    // 增加人數的限制（跟前台一樣）：不能因為加人，把任何一位原本正取的人擠到備取
+    if (n > Number(p.count)) {
+      const typeId = (p.session_id || '').slice(11);
+      const max = capacities[typeId] ?? 0;
+      const items = dayRegs.filter(r => r.session_id === p.session_id);
+      const mainSet = (override) => {
+        const set = new Set();
+        let total = 0, hit = false;
+        items.forEach(r => {
+          const seats = r.id === p.id && override !== null ? override : (Number(r.count) || 0);
+          if (!hit && total + seats <= max) { set.add(r.id); total += seats; } else { hit = true; }
+        });
+        return set;
+      };
+      const before = mainSet(null);
+      const after = mainSet(n);
+      for (const k of before) {
+        if (!after.has(k)) {
+          alert('❌ 目前名額已滿（或加人後會超過名額），只能減少人數，不能增加。\n如需增加，請用「後台代報名」另外新增一筆（會排在備取）。');
+          return;
+        }
+      }
+    }
+    const snaps = p.session_id ? await snapshotMain([p.session_id]) : null;
+    const { error } = await supabase.from('pickleball_registrations').update({ count: n }).eq('id', p.id);
+    if (error) { alert('修改失敗：' + error.message); return; }
+    loadDay();
+    await notifyAfterChange(snaps);
   };
 
   // ───────── 名單 / 財務計算 ─────────
@@ -1422,6 +1497,12 @@ export default function SatAdminPortal() {
                     className={`px-4 py-2 rounded-xl font-bold text-sm ${p.arrived ? 'bg-emerald-600 text-[#ffffff] font-extrabold shadow-sm' : 'bg-slate-200 text-slate-600'}`}
                   >
                     {p.arrived ? '✅ 已到場 (點擊取消)' : '未到場 (點擊註記)'}
+                  </button>
+                  <button
+                    onClick={() => handleAdminEditCount(p)}
+                    className="bg-amber-100 text-amber-800 hover:bg-amber-200 px-4 py-2 rounded-xl font-bold text-sm"
+                  >
+                    改人數
                   </button>
                   <button
                     onClick={() => deleteParticipant(p)}
