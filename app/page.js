@@ -183,7 +183,10 @@ export default function Home() {
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('navState');
-      if (raw) {
+      // 只有「按了 LINE 登入、整頁跳轉後回來」才還原進度；平常開網站一律從首頁開始，不會自己跳到上次看的頁面
+      const returning = sessionStorage.getItem('navReturn') === '1';
+      sessionStorage.removeItem('navReturn');
+      if (raw && returning) {
         const saved = JSON.parse(raw);
         if (saved.weekKey === getTargetSaturdayDateStr()) {
           if (saved.dow) setSelectedDow(saved.dow);
@@ -277,6 +280,8 @@ export default function Home() {
 
   // 🆕 六個分區的人數上限（即時生效，跟著 activeDate 走，用於實際報名判斷）
   const [capacitySettings, setCapacitySettings] = useState(DEFAULT_CAPACITY);
+  // 人數上限還沒從資料庫讀回來之前，先不要顯示名單／上限（避免先閃出預設的 9 位，再跳成真正的 16 位）
+  const [capLoaded, setCapLoaded] = useState(false);
 
   // 🆕 「人數上限設定」面板專用：可瀏覽/編輯未來一個月內任一個星期六，
   //    跟上面「即時生效」的 capacitySettings 分開，避免瀏覽其他週時誤動到目前開放中的場次
@@ -462,6 +467,7 @@ export default function Home() {
 
   // 🆕 讀取本場次的因雨取消狀態
   useEffect(() => {
+    setCapLoaded(false);
     fetchEventStatus();
     fetchCapacitySettings();
   }, [activeDate]);
@@ -481,8 +487,10 @@ export default function Home() {
 
   // 🆕 讀取「目前開放報名的這個星期六」六個分區的人數上限，即時生效用，沒有設定過就用預設值
   const fetchCapacitySettings = async () => {
-    const settings = await fetchCapacityForDate(activeDate);
+    const dateAtStart = activeDate;
+    const settings = await fetchCapacityForDate(dateAtStart);
     setCapacitySettings(settings);
+    setCapLoaded(true);
   };
 
   // 🆕 讀取「設定面板」目前選擇瀏覽的那個星期六的人數上限，純供編輯顯示用，不影響即時生效的 capacitySettings
@@ -1472,7 +1480,9 @@ export default function Home() {
             {/* 🆕 目前報名名單（唯讀，不用密碼就能看） */}
             <div className="space-y-3 pt-2">
               <div className="text-2xl sm:text-3xl font-black text-[#17587f] px-1">📋 目前報名名單</div>
-              {['normal', 'experience', 'openplay', 'advanced'].map(base => {
+              {!capLoaded ? (
+                <div className="text-center py-10 text-[#17587f] font-black text-lg">名單載入中…</div>
+              ) : ['normal', 'experience', 'openplay', 'advanced'].map(base => {
                 const typeId = base + (selectedSession === 'PM' ? '_pm' : '');
                 const items = groupRegs.filter(r => r.session_id === `${activeDate}_${typeId}`);
                 const max = capacitySettings[typeId] ?? 0;
@@ -1546,7 +1556,7 @@ export default function Home() {
                 {lineSession === null ? (
                   <div className="text-white font-bold text-center">確認登入狀態中…</div>
                 ) : (
-                  <a href="/api/line-login" className="block text-center w-full bg-[#06C755] hover:bg-[#05b34c] text-white p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }}>
+                  <a href="/api/line-login" onClick={() => { try { sessionStorage.setItem('navReturn', '1'); } catch (e) {} }} className="block text-center w-full bg-[#06C755] hover:bg-[#05b34c] text-white p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }}>
                     使用 LINE 登入
                   </a>
                 )}
@@ -1622,7 +1632,7 @@ export default function Home() {
                     <span className="text-base sm:text-2xl text-center leading-tight">{btnLabel}</span>
                     {!isCheckInMode && (
                       <span className={`text-xs sm:text-lg font-bold text-center ${capacitySettings[typeId] === 0 ? 'text-red-500' : 'text-[#17587f]'}`}>
-                        {capacitySettings[typeId] === 0 ? '❌ 本區未開放' : `(開放報名(限${capacitySettings[typeId]}位))`}
+                        {!capLoaded ? '…' : capacitySettings[typeId] === 0 ? '❌ 本區未開放' : `(開放報名(限${capacitySettings[typeId]}位))`}
                       </span>
                     )}
                   </button>
@@ -2136,7 +2146,7 @@ export default function Home() {
                     {!lineSession?.loggedIn ? (
                       <div className="text-center space-y-3 py-2">
                         <p className="text-white font-bold text-sm sm:text-base">🔒 請先使用 LINE 登入才能報名（防止黑名單被繞過）</p>
-                        <a href="/api/line-login" className="inline-block w-full bg-[#06C755] hover:bg-[#05b34c] text-white p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }}>
+                        <a href="/api/line-login" onClick={() => { try { sessionStorage.setItem('navReturn', '1'); } catch (e) {} }} className="inline-block w-full bg-[#06C755] hover:bg-[#05b34c] text-white p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }}>
                           使用 LINE 登入
                         </a>
                         <p className="text-white/80 font-bold text-xs">
@@ -2181,7 +2191,7 @@ export default function Home() {
 
         {/* 正取名單區塊 */}
         <div className="space-y-4">
-          <h2 className="text-2xl sm:text-4xl font-black text-[#17587f] px-2">正取名單 ({currentTotal} / {maxSeatsLimit})</h2>
+          <h2 className="text-2xl sm:text-4xl font-black text-[#17587f] px-2">正取名單 ({currentTotal} / {capLoaded ? maxSeatsLimit : '…'})</h2>
 
           {hasPromotedSeats && (
             <div className="bg-[#e6fcf5] border-2 border-[#63e6be] p-4 rounded-2xl text-[#0ca678] font-bold text-sm sm:text-base flex items-center gap-2 shadow-sm animate-pulse">
