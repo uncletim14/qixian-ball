@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://zasiaeehzhsaqjxxiklu.supabase.co';
@@ -282,6 +282,7 @@ export default function Home() {
   const [capacitySettings, setCapacitySettings] = useState(DEFAULT_CAPACITY);
   // 人數上限還沒從資料庫讀回來之前，先不要顯示名單／上限（避免先閃出預設的 9 位，再跳成真正的 16 位）
   const [capLoaded, setCapLoaded] = useState(false);
+  const latestDateRef = useRef('');
 
   // 🆕 「人數上限設定」面板專用：可瀏覽/編輯未來一個月內任一個星期六，
   //    跟上面「即時生效」的 capacitySettings 分開，避免瀏覽其他週時誤動到目前開放中的場次
@@ -467,6 +468,7 @@ export default function Home() {
 
   // 🆕 讀取本場次的因雨取消狀態
   useEffect(() => {
+    latestDateRef.current = activeDate;
     setCapLoaded(false);
     fetchEventStatus();
     fetchCapacitySettings();
@@ -489,6 +491,8 @@ export default function Home() {
   const fetchCapacitySettings = async () => {
     const dateAtStart = activeDate;
     const settings = await fetchCapacityForDate(dateAtStart);
+    // 若讀取期間使用者已切換到別天，丟掉這筆過期結果，避免短暫顯示錯的人數
+    if (latestDateRef.current !== dateAtStart) return;
     setCapacitySettings(settings);
     setCapLoaded(true);
   };
