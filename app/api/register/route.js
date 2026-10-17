@@ -79,11 +79,25 @@ export async function POST(req) {
   }
   const reviewStatus = approved ? 'approved' : 'pending';
 
-  const { error } = await supabaseAdmin.from('pickleball_registrations').insert([{
+  const { data: inserted, error } = await supabaseAdmin.from('pickleball_registrations').insert([{
     name, count, line_user_id: session.lineUserId, session_id: sessionId,
     created_at: new Date().toISOString(), arrived: false, review_status: reviewStatus
-  }]);
+  }]).select('id').single();
   if (error) return fail('報名失敗：' + error.message, 500);
+
+  // 🆕 連按／同時送出兩次時，上面的「重複報名」檢查可能兩次都通過。
+  //    這裡插入後再檢查一次：同一個人、同一場次若有多筆，只保留最早的一筆，後來的自動刪除。
+  const { data: mine } = await supabaseAdmin
+    .from('pickleball_registrations')
+    .select('id')
+    .eq('session_id', sessionId)
+    .eq('line_user_id', session.lineUserId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (mine && mine.length > 1 && mine[0].id !== inserted.id) {
+    await supabaseAdmin.from('pickleball_registrations').delete().eq('id', inserted.id);
+    return fail(`❌ 您（${name}）已經報名過本場次囉！`);
+  }
 
   return Response.json({ ok: true, reviewStatus });
 }
