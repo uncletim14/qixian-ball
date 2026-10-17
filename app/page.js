@@ -242,6 +242,9 @@ export default function Home() {
   const [clickCount, setClickCount] = useState(0);
 
   const [form, setForm] = useState({ name: '', count: '1', password: '' });
+  // 🆕 防止連按「確認報名」造成重複報名：送出中就鎖住按鈕
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   // 🆕 LINE 登入狀態：null = 尚未確認，{loggedIn:false} = 確認未登入，{loggedIn:true,...} = 已登入
   const [lineSession, setLineSession] = useState(null);
@@ -992,8 +995,20 @@ export default function Home() {
     alert(`已將 ${activeDate} ${sessionLabel} 變更為 ${actionText}！`);
   };
 
-  // 報名提交
+  // 報名提交（外層：負責鎖住連按，真正的報名流程在 submitCore）
   const submit = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await submitCore();
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  };
+
+  const submitCore = async () => {
     // 🆕 防灌爆檢查 1：honeypot 欄位有值，直接視為機器人，靜默擋下（不顯示任何提示，避免對方察覺並調整腳本）
     if (honeypot.trim() !== '') {
       return;
@@ -2183,7 +2198,7 @@ export default function Home() {
                             <option key={n} value={n}>{n} 位</option>
                           ))}
                         </select>
-                        <button className="w-full bg-[#e8c23a] text-[#101010] p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010]" style={{ boxShadow: '3px 3px 0 #101010' }} onClick={submit}>確認報名</button>
+                        <button className={`w-full text-[#101010] p-4 rounded-2xl text-xl font-black border-[3px] border-[#101010] ${submitting ? 'bg-slate-300 cursor-not-allowed' : 'bg-[#e8c23a]'}`} style={{ boxShadow: '3px 3px 0 #101010' }} onClick={submit} disabled={submitting}>{submitting ? '送出中，請稍候…' : '確認報名'}</button>
                       </>
                     )}
                   </div>
