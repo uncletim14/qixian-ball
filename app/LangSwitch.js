@@ -193,6 +193,11 @@ function translateCore(core) {
   if (!core || !/[一-鿿]/.test(core)) return undefined;
   const norm = core.replace(/\s+/g, ' ');
   if (Object.prototype.hasOwnProperty.call(EXACT_NORM, norm)) return EXACT_NORM[norm];
+  if (norm.indexOf(' / ') > 0) {
+    const parts = norm.split(' / ');
+    const outs = parts.map(x => (Object.prototype.hasOwnProperty.call(EXACT_NORM, x) ? EXACT_NORM[x] : undefined));
+    if (outs.every(x => x !== undefined)) return outs.join(' / ');
+  }
   for (const [re, fn] of PATTERNS) {
     const m = norm.match(re);
     if (m) return fn(m);
@@ -312,6 +317,8 @@ export default function LangSwitch() {
       <style>{`
         .qx-en-title{display:none}
         html[data-lang="en"] h1 > span:not(.qx-en-title){display:none}
+        html[data-lang="en"] .qx-zone-label{font-size:2rem !important;line-height:1.1;text-align:center}
+        html[data-lang="en"] .qx-zone-subs{font-size:1.05rem !important}
         html[data-lang="en"] h1 > .qx-en-title{display:block;text-align:center;font-size:.6em;letter-spacing:0}
       `}</style>
       <div data-no-i18n="1" style={{ position: 'fixed', top: 10, right: 10, zIndex: 60, display: 'flex', borderRadius: 999, overflow: 'hidden', boxShadow: '2px 2px 0 #101010' }}>
