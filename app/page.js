@@ -1515,8 +1515,8 @@ export default function Home() {
                   style={{ boxShadow: '4px 4px 0 #101010' }}
                 >
                   <span className="text-4xl">{ZONE_GROUPS[g].icon}</span>
-                  <span className="text-3xl sm:text-5xl font-black">{ZONE_GROUPS[g].label}</span>
-                  <span className="text-base sm:text-2xl font-black text-center leading-snug">{ZONE_GROUPS[g].subs.map(sb => sb.label).join(' / ')}</span>
+                  <span className="qx-zone-label text-3xl sm:text-5xl font-black">{ZONE_GROUPS[g].label}</span>
+                  <span className="qx-zone-subs text-base sm:text-2xl font-black text-center leading-snug">{ZONE_GROUPS[g].subs.map(sb => sb.label).join(' / ')}</span>
                 </button>
               ))}
             </div>
