@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import LangSwitch from './LangSwitch';
 
 const SUPABASE_URL = 'https://zasiaeehzhsaqjxxiklu.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphc2lhZWVoemhzYXFqeHhpa2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0Njc4NDksImV4cCI6MjA5NjA0Mzg0OX0.UYNrbcm5HaDucdcAj7XMwIBye6dsA6cRaG-bLY34XVM';
@@ -537,6 +538,26 @@ export default function Home() {
       if (!cancelled) setDayClosed(result);
     })();
     return () => { cancelled = true; };
+  }, [weekKey, navStage]);
+
+  // 🆕 首頁：各日期各時段是否「因雨取消」（顯示在選日期的卡片上）
+  const [homeCancelled, setHomeCancelled] = useState({});
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const keys = [];
+      for (const o of DOW_OPTIONS) {
+        const dStr = o.dow === 6 ? weekKey : getCycleDateStr(o.dow);
+        if (o.dow === 6) keys.push(`${dStr}_AM`);
+        keys.push(`${dStr}_PM`);
+      }
+      const { data } = await supabase.from('event_status').select('date_key, is_cancelled').in('date_key', keys);
+      if (!alive) return;
+      const m = {};
+      (data || []).forEach(r => { if (r.is_cancelled) m[r.date_key] = true; });
+      setHomeCancelled(m);
+    })();
+    return () => { alive = false; };
   }, [weekKey, navStage]);
 
   // 🆕 儲存人數上限設定（管理員用）：儲存到「設定面板目前選擇瀏覽」的那個星期六，
@@ -1321,6 +1342,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#f0f4f8] text-[#2d3748] p-4 sm:p-8">
+      <LangSwitch />
       <div className="max-w-2xl mx-auto space-y-6 sm:space-y-10 py-2 sm:py-6">
 
         <div className="h-4"></div>
@@ -1358,6 +1380,7 @@ export default function Home() {
               <div className="w-fit mx-auto sm:w-full">
                 <h1 className="flex justify-between sm:justify-center sm:gap-5 text-3xl sm:text-6xl font-black leading-tight select-none drop-shadow-sm text-[#17587f]">
                   {'七賢匹克球敘團'.split('').map((ch, i) => <span key={i}>{ch}</span>)}
+                  <span className="qx-en-title">Qixian Pickleball Club</span>
                 </h1>
 
                 <div className="border-t-2 border-dashed border-[#e8c23a] pt-4 mt-4 sm:mt-6">
@@ -1447,9 +1470,11 @@ export default function Home() {
                     <span className="text-3xl sm:text-5xl font-black text-[#17587f] mt-1">{dateStr.slice(5)}{ended ? <span className="text-base sm:text-xl">（已結束）</span> : closed ? <span className="text-base sm:text-xl">（未開放）</span> : ''}</span>
                     {o.dow === 6 ? (
                       <span className="text-lg sm:text-2xl font-black mt-1 flex flex-col items-center">
-                        <span>早上 9:00-12:00</span>
-                        <span>晚上 19:00-21:20</span>
+                        <span className={homeCancelled[`${dateStr}_AM`] ? 'text-red-600' : ''}>{homeCancelled[`${dateStr}_AM`] ? '⛈️ 早上場因雨取消' : '早上 9:00-12:00'}</span>
+                        <span className={homeCancelled[`${dateStr}_PM`] ? 'text-red-600' : ''}>{homeCancelled[`${dateStr}_PM`] ? '⛈️ 晚上場因雨取消' : '晚上 19:00-21:20'}</span>
                       </span>
+                    ) : homeCancelled[`${dateStr}_PM`] ? (
+                      <span className="text-lg sm:text-2xl font-black mt-1 text-red-600">⛈️ 因雨取消</span>
                     ) : (
                       <span className="text-lg sm:text-2xl font-black mt-1">19:00-21:20</span>
                     )}
