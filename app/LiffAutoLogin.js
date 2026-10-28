@@ -21,6 +21,12 @@ function loadSdk() {
 export default function LiffAutoLogin() {
   useEffect(() => {
     if (!LIFF_ID || LIFF_ID.startsWith('PUT_')) return;
+    // 🆕 從 LINE 登入頁（一般瀏覽器）回來時，網址會帶 liff.state，
+    //    需要呼叫 liff.init() 讓 LIFF 把使用者送回原本要去的頁面（例如 /share）
+    if (window.location.search.indexOf('liff.state') !== -1 || window.location.search.indexOf('liffClientId') !== -1) {
+      loadSdk().then(liff => liff.init({ liffId: LIFF_ID })).catch(() => {});
+      return;
+    }
     // 只有在 LINE 的瀏覽器裡才需要
     if (!/Line\//i.test(navigator.userAgent)) return;
     let stopped = false;
