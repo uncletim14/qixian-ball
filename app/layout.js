@@ -1,4 +1,5 @@
 import './globals.css';
+import LiffAutoLogin from './LiffAutoLogin';
 
 // 🆕 貼到 LINE / FB 等的網址預覽卡片（圖片放在 public/og.jpg）
 const SITE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
@@ -33,6 +34,7 @@ export default function RootLayout({ children }) {
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
       </head>
       <body className="bg-[#122037] text-white antialiased min-h-screen">
+        <LiffAutoLogin />
         {children}
       </body>
     </html>
