@@ -161,6 +161,9 @@ export default function SatAdminPortal() {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [availableMonths, setAvailableMonths] = useState([]);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showCal, setShowCal] = useState(false);
+  const [calData, setCalData] = useState(null);
+  const [calLoading, setCalLoading] = useState(false);
   const [originUrl, setOriginUrl] = useState('');
 
   // ───────── 初始化 ─────────
@@ -699,7 +702,9 @@ export default function SatAdminPortal() {
   const totalActualIncome = totalActualRegistrationIncome + extraIncomeTotal;
   // 場地費依場次分開：該場次因雨取消就歸零
   const allCancelledToday = !isTeamPracticeDay && !!cancelled[selectedSession];
-  const effectiveVenueFee = allCancelledToday ? 0 : venueFeeInput;
+  // 🆕 本場次四個分區人數上限都是 0（沒有開放打球）→ 也不算場地費
+  const notOpenToday = !isTeamPracticeDay && BASES.every(b => (capacities[typeIdFor(b, selectedSession)] ?? 0) === 0);
+  const effectiveVenueFee = (allCancelledToday || notOpenToday) ? 0 : venueFeeInput;
   const totalDayExpense = effectiveVenueFee + extraExpenseTotal;
   const netProfit = totalActualIncome - totalDayExpense;
   const isCurrentSessionCancelled = (selectedSession === 'AM' || selectedSession === 'PM') && cancelled[selectedSession];
@@ -721,6 +726,75 @@ export default function SatAdminPortal() {
   const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(checkInUrl)}`;
 
   // ───────── 月報表匯出 ─────────
+  // ───────── 收支月曆：每天（週六分早上/晚上）顯示當場純益；因雨取消的場次場地費與報名費收入歸零 ─────────
+  const loadCalendar = async () => {
+    if (!selectedMonth) return;
+    const month = selectedMonth;
+    setCalLoading(true);
+    try {
+      const regs = await fetchAllRows(() =>
+        supabase.from('pickleball_registrations')
+          .select('id, name, count, session_id, arrived, review_status, created_at')
+          .like('session_id', `${month}/%`)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+      );
+      const { data: finAll } = await supabase.from('financial_records').select('*').like('date_key', `${month}/%`);
+      const { data: settingRows } = await supabase.from('event_settings').select('*').like('date_key', `${month}/%`);
+      const { data: cancelledRows } = await supabase.from('event_status').select('date_key').eq('is_cancelled', true);
+      const cancelledSet = new Set((cancelledRows || []).map(c => c.date_key));
+      const settingByDate = {};
+      (settingRows || []).forEach(r => { settingByDate[r.date_key] = r; });
+      const venueOf = (d, sess) => {
+        const row = settingByDate[d];
+        const col = (dowOf(d) === 6 && sess === 'PM') ? 'venue_fee_pm' : 'venue_fee';
+        return row && row[col] !== undefined && row[col] !== null ? row[col] : defaultVenueFee(d, sess);
+      };
+      const dates = Array.from(new Set([
+        ...regs.map(r => r.session_id.split('_')[0]),
+        ...(finAll || []).map(r => r.date_key)
+      ])).sort();
+      const map = {};
+      dates.forEach(d => {
+        const dow = dowOf(d);
+        const dayFinAll = (finAll || []).filter(r => r.date_key === d);
+        if (dow === 2) {
+          // 週二球隊練習：獨立記帳
+          const cancelled = cancelledSet.has(`${d}_PM`);
+          const income = dayFinAll.filter(r => r.type === 'income').reduce((x, r) => x + r.amount, 0);
+          const out = dayFinAll.filter(r => r.type === 'expense').reduce((x, r) => x + r.amount, 0);
+          const venue = cancelled ? 0 : venueOf(d, 'PM');
+          map[d] = [{ label: '隊', cancelled, profit: income - venue - out }];
+          return;
+        }
+        const isSat = dow === 6;
+        map[d] = (isSat ? ['AM', 'PM'] : ['PM']).map(sess => {
+          const cancelled = cancelledSet.has(`${d}_${sess}`);
+          const cap = capacityMap(settingByDate[d], d);
+          let regIncome = 0;
+          BASES.forEach(base => {
+            const typeId = typeIdFor(base, sess);
+            const items = regs.filter(r => r.session_id === `${d}_${typeId}`);
+            const { main } = splitStrict(items, cap[typeId]);
+            const ok = main.filter(it => it.review_status !== 'pending');
+            const present = ok.filter(it => it.arrived).reduce((x, it) => x + (Number(it.count) || 0), 0);
+            if (!cancelled) regIncome += present * PRICE[base];
+          });
+          const dayFin = dayFinAll.filter(r => !isSat || (r.session || 'AM') === sess);
+          const extraIn = dayFin.filter(r => r.type === 'income').reduce((x, r) => x + r.amount, 0);
+          const extraOut = dayFin.filter(r => r.type === 'expense').reduce((x, r) => x + r.amount, 0);
+          const notOpen = BASES.every(base => (cap[typeIdFor(base, sess)] ?? 0) === 0);
+          const venue = (cancelled || notOpen) ? 0 : venueOf(d, sess);
+          return { label: isSat ? (sess === 'AM' ? '早' : '晚') : '', cancelled, notOpen, profit: regIncome + extraIn - venue - extraOut };
+        });
+      });
+      setCalData({ month, map });
+    } finally {
+      setCalLoading(false);
+    }
+  };
+  useEffect(() => { if (showCal) loadCalendar(); }, [showCal, selectedMonth]);
+
   const handleExportMonthlyReport = async () => {
     if (!selectedMonth) return;
     const regs = await fetchAllRows(() =>
@@ -779,7 +853,8 @@ export default function SatAdminPortal() {
           const dayFin = (finAll || []).filter(r => r.date_key === d && (!isSat || (r.session || 'AM') === sess));
           const extraIn = dayFin.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
           const extraOut = dayFin.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
-          const venue = cancelledSet.has(`${d}_${sess}`) ? 0 : venueOf(d, sess);
+          const notOpen = BASES.every(base => (cap[typeIdFor(base, sess)] ?? 0) === 0);
+          const venue = (cancelledSet.has(`${d}_${sess}`) || notOpen) ? 0 : venueOf(d, sess);
           const profit = (regIncome + extraIn) - (venue + extraOut);
           gReg += regIncome; gExtraIn += extraIn; gVenue += venue; gExtraOut += extraOut; gNet += profit;
           csv += `${label(d)}${isSat ? (sess === 'AM' ? ' 早上場' : ' 晚上場') : ''},${cells.join(',')},$${regIncome},$${extraIn},$${venue},$${extraOut},$${profit}\n`;
@@ -887,6 +962,12 @@ export default function SatAdminPortal() {
                   className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xs transition-colors"
                 >
                   📊 匯出月記帳報表
+                </button>
+                <button
+                  onClick={() => setShowCal(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xs transition-colors"
+                >
+                  📅 收支月曆
                 </button>
               </div>
             </div>
@@ -1192,6 +1273,9 @@ export default function SatAdminPortal() {
             {allCancelledToday && (
               <div className="text-[10px] font-bold text-red-500 mt-1">⛈️ 因雨取消，場地費已歸零</div>
             )}
+            {!allCancelledToday && notOpenToday && (
+              <div className="text-[10px] font-bold text-slate-500 mt-1">🚫 本場次未開放（人數上限皆為 0），場地費已歸零</div>
+            )}
           </div>
           <div className="bg-white p-5 rounded-3xl shadow-sm border-2 border-emerald-300 text-center bg-emerald-50/30">
             <span className="text-xs font-bold text-emerald-800 uppercase">{isSatDay ? (selectedSession === 'AM' ? '早上場純益' : '晚上場純益') : '當日純益'}</span>
@@ -1374,6 +1458,65 @@ export default function SatAdminPortal() {
             </div>
           )}
         </div>
+
+        {/* 📅 收支月曆 */}
+        {showCal && (() => {
+          const month = selectedMonth;
+          const [yy, mm] = (month || '0000/00').split('/').map(Number);
+          const firstDow = new Date(yy, mm - 1, 1).getDay();
+          const daysInMonth = new Date(yy, mm, 0).getDate();
+          const idx = availableMonths.indexOf(month);
+          const map = calData && calData.month === month ? calData.map : {};
+          const fmt = (n) => (n > 0 ? '+' : n < 0 ? '-' : '') + Math.abs(n).toLocaleString();
+          let total = 0;
+          Object.values(map).forEach(list => list.forEach(x => { total += x.profit; }));
+          const cells = [];
+          for (let i = 0; i < firstDow; i++) cells.push(null);
+          for (let dd = 1; dd <= daysInMonth; dd++) cells.push(dd);
+          return (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4" onClick={() => setShowCal(false)}>
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-auto p-3 sm:p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h2 className="text-xl sm:text-2xl font-black text-[#1a4d4d]">📅 {yy} 年 {mm} 月 收支月曆</h2>
+                  <div className="flex items-center gap-2">
+                    <button disabled={idx <= 0} onClick={() => setSelectedMonth(availableMonths[idx - 1])} className="px-3 py-1.5 rounded-lg bg-slate-100 font-black disabled:opacity-30">◀</button>
+                    <button disabled={idx < 0 || idx >= availableMonths.length - 1} onClick={() => setSelectedMonth(availableMonths[idx + 1])} className="px-3 py-1.5 rounded-lg bg-slate-100 font-black disabled:opacity-30">▶</button>
+                    <button onClick={() => setShowCal(false)} className="px-3 py-1.5 rounded-lg bg-slate-700 text-white font-bold text-sm">關閉</button>
+                  </div>
+                </div>
+                {calLoading && <div className="text-center text-slate-400 font-bold text-sm">計算中…</div>}
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                  {['日', '一', '二', '三', '四', '五', '六'].map(w => (
+                    <div key={w} className="text-center text-xs sm:text-sm font-black text-slate-500 py-1">{w}</div>
+                  ))}
+                  {cells.map((dd, i) => {
+                    if (dd === null) return <div key={'e' + i} />;
+                    const key = `${month}/${pad(dd)}`;
+                    const list = map[key] || [];
+                    return (
+                      <div key={key} className="min-h-[64px] sm:min-h-[84px] border border-slate-200 rounded-lg sm:rounded-xl p-1 sm:p-1.5 flex flex-col">
+                        <div className="text-xs sm:text-sm font-black text-slate-800">{dd}</div>
+                        <div className="mt-auto space-y-0.5 text-right">
+                          {list.map((x, j) => (
+                            <div key={j} className={`text-[11px] sm:text-sm font-black leading-tight ${x.profit > 0 ? 'text-emerald-600' : x.profit < 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                              {x.label && <span className="text-[9px] sm:text-[11px] text-slate-400 mr-0.5">{x.label}</span>}
+                              {x.cancelled ? '⛈️' : x.notOpen ? '🚫' : ''}{fmt(x.profit)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between bg-emerald-50 border-2 border-emerald-300 rounded-2xl px-4 py-3">
+                  <span className="font-black text-emerald-900">本月純益合計</span>
+                  <span className={`text-2xl font-black ${total >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{fmt(total)}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-bold text-center">每格顯示當場純益（週六分「早」「晚」兩場）。⛈️ 因雨取消、🚫 未開放（人數上限皆為 0）的場次，場地費與報名費收入都歸零，只計入當場另外記的收支。</p>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 📱 QR Code Modal 視窗 */}
         {showQRModal && (
