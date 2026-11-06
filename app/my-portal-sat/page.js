@@ -156,6 +156,20 @@ export default function SatAdminPortal() {
   const [blacklists, setBlacklists] = useState([]);
   const [blockNameInput, setBlockNameInput] = useState('');
   const [lineNames, setLineNames] = useState({}); // line_user_id → LINE 真實顯示名稱
+  // 🆕 補抓還沒有的 LINE 真實名稱（名單、審核、缺席名單都會用到）
+  const ensureLineNames = async (ids) => {
+    const need = [...new Set((ids || []).filter(Boolean))].filter(id => !(id in lineNamesRef.current));
+    if (need.length === 0) return;
+    const { data: users } = await supabase.from('line_users').select('line_user_id, display_name').in('line_user_id', need);
+    const add = {};
+    need.forEach(id => { add[id] = ''; });
+    (users || []).forEach(u => { add[u.line_user_id] = u.display_name || ''; });
+    lineNamesRef.current = { ...lineNamesRef.current, ...add };
+    setLineNames(prev => ({ ...prev, ...add }));
+  };
+  const lineNamesRef = useRef({});
+  const lineNameTag = (lineUserId, nick) => (lineUserId && lineNames[lineUserId] && lineNames[lineUserId] !== nick
+    ? <span className="text-xs font-bold text-slate-400 ml-1">（LINE：{lineNames[lineUserId]}）</span> : null);
 
   // ───────── 月報表 / QR ─────────
   const [selectedMonth, setSelectedMonth] = useState('');
@@ -165,6 +179,9 @@ export default function SatAdminPortal() {
   const [calData, setCalData] = useState(null);
   const [calLoading, setCalLoading] = useState(false);
   const [originUrl, setOriginUrl] = useState('');
+
+  useEffect(() => { ensureLineNames(dayRegs.map(r => r.line_user_id)); }, [dayRegs]);
+  useEffect(() => { ensureLineNames(absenceSummary.map(a => a.line_user_id)); }, [absenceSummary]);
 
   // ───────── 初始化 ─────────
   useEffect(() => {
@@ -526,7 +543,8 @@ export default function SatAdminPortal() {
       const { data: users } = await supabase.from('line_users').select('line_user_id, display_name').in('line_user_id', ids);
       const map = {};
       (users || []).forEach(u => { map[u.line_user_id] = u.display_name; });
-      setLineNames(map);
+      lineNamesRef.current = { ...lineNamesRef.current, ...map };
+      setLineNames(prev => ({ ...prev, ...map }));
     }
   };
   const blockUntilStr = () => {
@@ -1046,7 +1064,7 @@ export default function SatAdminPortal() {
                   >
                     <div className="flex items-center gap-3 flex-wrap">
                       <span className="px-3 py-1 rounded-lg text-sm font-bold bg-amber-200 text-amber-900">首次報名</span>
-                      <span className="font-bold text-xl text-slate-800">{p.name}</span>
+                      <span className="font-bold text-xl text-slate-800">{p.name}</span>{lineNameTag(p.line_user_id, p.name)}
                       <span className="text-slate-600 font-bold text-sm">
                         ({BASE_ICON[pBase] || ''} {BASE_LABEL[pBase] || pType}{pType.endsWith('_pm') ? '(晚上)' : ''} - {p.count}位 - {pDate} 週{pDate ? DAY_NAMES[dowOf(pDate)] : ''})
                       </span>
@@ -1364,7 +1382,7 @@ export default function SatAdminPortal() {
                                     {a.siteLabel}
                                   </span>
                                   <div>
-                                    <span className="font-black text-lg text-slate-800">{a.name}</span>
+                                    <span className="font-black text-lg text-slate-800">{a.name}</span>{lineNameTag(a.line_user_id, a.name)}
                                     <span className="text-xs font-bold text-slate-400 ml-1">{isDatesShown ? '▲ 收合日期' : '▼ 查看日期'}</span>
                                     {isDatesShown && (
                                       <div className="text-xs font-bold text-slate-400 mt-0.5">
@@ -1627,7 +1645,7 @@ export default function SatAdminPortal() {
                   }`}>
                     {p.review_status === 'pending' ? '⏳ 審核中' : p.isConfirmed ? '正取' : '備取'}
                   </span>
-                  <span className="font-bold text-xl text-slate-800">{p.name}</span>
+                  <span className="font-bold text-xl text-slate-800">{p.name}</span>{lineNameTag(p.line_user_id, p.name)}
                   {!p.line_user_id && <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-sky-100 text-sky-700">後台新增</span>}
                   <span className="text-slate-600 font-bold">
                     ({BASE_ICON[p.base]} {BASE_LABEL[p.base]} - {p.count}位)
