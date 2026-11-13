@@ -135,8 +135,9 @@ export default function SatAdminPortal() {
   const [financialRecords, setFinancialRecords] = useState([]);
   const [finType, setFinType] = useState('income');
   const [finCategory, setFinCategory] = useState('租拍');
-  const [finAmount, setFinAmount] = useState('');
-  const [finNote, setFinNote] = useState('');
+  // 🆕 金額/備註改成「不受控」輸入框（用 ref 讀值）：打字時整頁不再重新渲染，避免 iPhone 輸入時畫面亂跳
+  const finAmountRef = useRef(null);
+  const finNoteRef = useRef(null);
   const [adminCategoryFilter, setAdminCategoryFilter] = useState('ALL');
   // 後台代客報名（沒有 LINE 的球友，例如外國球友）
   const [addName, setAddName] = useState('');
@@ -322,15 +323,15 @@ export default function SatAdminPortal() {
   // ───────── 記帳 ─────────
   const handleAddFinancialRecord = async (e) => {
     e.preventDefault();
-    const amountNum = parseInt(finAmount);
+    const amountNum = parseInt(finAmountRef.current?.value);
     if (isNaN(amountNum) || amountNum <= 0) { alert('請輸入有效的金額！'); return; }
     const { error } = await supabase.from('financial_records').insert([{
-      date_key: selectedDate, type: finType, category: finCategory, amount: amountNum, note: finNote.trim(),
+      date_key: selectedDate, type: finType, category: finCategory, amount: amountNum, note: (finNoteRef.current?.value || '').trim(),
       session: dowOf(selectedDate) === 6 ? selectedSession : null
     }]);
     if (error) { alert(`新增失敗：${error.message}`); return; }
-    setFinAmount('');
-    setFinNote('');
+    if (finAmountRef.current) finAmountRef.current.value = '';
+    if (finNoteRef.current) finNoteRef.current.value = '';
     loadDay();
   };
   const handleDeleteFinancialRecord = async (id) => {
@@ -1231,8 +1232,9 @@ export default function SatAdminPortal() {
                 type="number"
                 placeholder="金額"
                 required
-                value={finAmount}
-                onChange={e => setFinAmount(e.target.value)}
+                ref={finAmountRef}
+                defaultValue=""
+                inputMode="numeric"
                 className="w-24 font-bold text-lg outline-none"
               />
             </div>
@@ -1240,8 +1242,8 @@ export default function SatAdminPortal() {
             <input
               type="text"
               placeholder="備註 (例如：小明租拍、賣球拍/握把布)"
-              value={finNote}
-              onChange={e => setFinNote(e.target.value)}
+              ref={finNoteRef}
+              defaultValue=""
               className="flex-1 min-w-[180px] bg-white border p-3 rounded-xl font-bold text-sm outline-none"
             />
 
