@@ -940,8 +940,11 @@ export default function SatAdminPortal() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800" style={{ zoom: 1.15, fontFamily: "'Inter', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');`}</style>
+    <main className="qx-main min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800" style={{ fontFamily: "'Inter', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        /* 🆕 電腦才放大 1.15 倍；手機不用 zoom（zoom 會讓手機鍵盤彈出時畫面亂跳），且輸入框 16px 避免 iOS 自動放大 */
+        @media (min-width: 768px) { .qx-main { zoom: 1.15; } }
+        @media (max-width: 767px) { .qx-main input, .qx-main select, .qx-main textarea { font-size: 16px !important; } }`}</style>
       <div className="max-w-5xl mx-auto space-y-8">
 
         {/* 頂部控制區 */}
