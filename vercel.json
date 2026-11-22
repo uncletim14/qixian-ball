@@ -1,4 +1,7 @@
 {
   "buildCommand": "npm install --legacy-peer-deps && next build",
-  "installCommand": "npm install --legacy-peer-deps"
+  "installCommand": "npm install --legacy-peer-deps",
+  "crons": [
+    { "path": "/api/cron-blocked", "schedule": "0 7 * * *" }
+  ]
 }
