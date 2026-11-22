@@ -2,7 +2,7 @@
 // 後台幹部在「刪除報名／改人數／調整人數上限」前後呼叫：
 //   mode: 'snapshot' → 回傳目前各場次的正取名單 id（變動前先記下來）
 //   mode: 'notify'   → 比對變動後的正取名單，新增的正取（備取遞補成功）就發 LINE 通知
-import { supabaseAdmin, fail, getMainIds, pushLineText, describeSession } from '@/lib/satServer';
+import { supabaseAdmin, fail, getMainIds, pushLineText, describeSession, describeSessionEn } from '@/lib/satServer';
 
 const SESSION_ID_RE = /^\d{4}\/\d{2}\/\d{2}_[a-z_]+$/;
 
@@ -42,7 +42,7 @@ export async function POST(req) {
         if (r.line_user_id) {
           ok = await pushLineText(
             r.line_user_id,
-            `🎉 備取成功！\n你報名的【${describeSession(s.sessionId)}】已遞補為正取（${r.count} 位），請準時出席！\n如果無法出席，請記得上網站取消，讓其他球友有機會。`
+            `🎉 備取成功！\n你報名的【${describeSession(s.sessionId)}】已遞補為正取（${r.count} 位），請準時出席！\n如果無法出席，請記得上網站取消，讓其他球友有機會。\n\n🎉 You're off the waitlist!\nYour spot for [${describeSessionEn(s.sessionId)}] (${r.count} ${r.count > 1 ? 'players' : 'player'}) is now confirmed — please arrive on time.\nIf you can't come, please cancel on the website so others can join.`
           );
         }
         if (ok) sent++; else unreachable.push(r.name);
